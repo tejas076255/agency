@@ -35,7 +35,15 @@
         "max_batch_size": 5,
         "max_batch_timeout": 5,
         "max_retries": 3,
+        // At most 5 consumer invocations in parallel: protects Google API quotas.
+        "max_concurrency": 5,
         "dead_letter_queue": "agency-jobs-dlq",
+      },
+      {
+        // Jobs that crashed max_retries times end up here; the Worker marks them as failed.
+        "queue": "agency-jobs-dlq",
+        "max_batch_size": 10,
+        "max_retries": 0,
       },
     ],
   },

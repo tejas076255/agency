@@ -29,6 +29,8 @@ import {
 import { randomToken } from '../lib/crypto';
 import { monthLabel } from '../lib/dates';
 import { getDb } from '../lib/db';
+import { log } from '../lib/log';
+import { loadReportSettings } from '../lib/report-settings';
 import { runHealthCheck } from './health-check';
 
 const FRESH_CHECK_MS = 3 * 24 * 60 * 60 * 1000;
@@ -306,7 +308,7 @@ export async function generateReport(
       // If Google couldn't fetch an image, still produce the report without images.
       if (!(err instanceof GoogleApiError) || err.status !== 400 || imageRequests.length === 0)
         throw err;
-      console.warn('Slides image insert failed, retrying without images:', err.message);
+      log.warn('Slides image insert failed, retrying without images', err);
       await slidesBatchUpdate(token, fileId, [
         ...colorRequests,
         ...textRequests,
@@ -335,7 +337,19 @@ export async function generateReport(
   return { reportId, sent: false };
 }
 
-export function reportEmailHtml(data: ReportData, shareUrl: string): string {
+/** Fills {client}, {month}, {agency} in a report email template. */
+export function fillTemplate(template: string, data: Pick<ReportData, 'client' | 'monthLabel' | 'agency'>) {
+  return template
+    .replaceAll('{client}', data.client.name)
+    .replaceAll('{month}', data.monthLabel)
+    .replaceAll('{agency}', data.agency.name);
+}
+
+export function reportEmailHtml(
+  data: ReportData,
+  shareUrl: string,
+  opts: { message?: string; includeHinglish?: boolean } = {},
+): string {
   const e = escapeHtml;
   const kpi = (label: string, value: string, sub: string) =>
     `<td style="padding:12px;border:1px solid #e2e8f0;border-radius:8px;vertical-align:top">
@@ -348,12 +362,14 @@ export function reportEmailHtml(data: ReportData, shareUrl: string): string {
     <div style="padding:24px">
       <p style="margin:0 0 4px;color:#64748b">Monthly report · ${e(data.monthLabel)}</p>
       <h1 style="margin:0 0 16px;font-size:22px">${e(data.client.name)}</h1>
+      ${opts.message ? `<p style="line-height:1.6;white-space:pre-line">${e(fillTemplate(opts.message, data))}</p>` : ''}
       <p style="font-size:16px;margin:0 0 16px">Website health score: <b>${data.score ?? 'n/a'}/100</b></p>
       <table cellspacing="8" style="width:100%;margin:0 -8px 16px"><tr>
         ${kpi('Search clicks', fmtNum(data.kpis.clicks), data.kpis.clicks === null ? '' : fmtChange(data.kpis.clicksChangePct))}
         ${kpi('Website sessions', fmtNum(data.kpis.sessions), data.kpis.sessions === null ? '' : fmtChange(data.kpis.sessionsChangePct))}
       </tr></table>
       ${data.summary ? `<p style="line-height:1.6">${e(data.summary)}</p>` : ''}
+      ${opts.includeHinglish && data.summaryHinglish ? `<p style="line-height:1.6;color:#334155"><i>${e(data.summaryHinglish)}</i></p>` : ''}
       ${
         data.actions.length
           ? `<h2 style="font-size:16px;margin:24px 0 8px">What we will do next</h2><ol style="padding-left:20px;line-height:1.6">${data.actions
@@ -388,11 +404,16 @@ export async function sendReportEmail(env: Env, agencyId: string, reportId: stri
   const pdf = report.pdfKvKey ? await env.KV.get(report.pdfKvKey, 'arrayBuffer') : null;
   if (!pdf) throw new Error('Report PDF not found. Please regenerate the report.');
   const data = JSON.parse(report.dataJson ?? '{}') as ReportData;
+  const settings = await loadReportSettings(env, agencyId);
   const token = await getAccessToken(env, conn);
   const mime = buildMimeMessage({
     to: client.contactEmail,
-    subject: `${data.client.name}: ${data.monthLabel} website report from ${data.agency.name}`,
-    html: reportEmailHtml(data, `${env.APP_URL}/r/${report.shareToken}`),
+    cc: settings.ccAgency && conn.googleEmail.includes('@') ? conn.googleEmail : undefined,
+    subject: fillTemplate(settings.emailSubject, data),
+    html: reportEmailHtml(data, `${env.APP_URL}/r/${report.shareToken}`, {
+      message: settings.emailMessage,
+      includeHinglish: settings.includeHinglish,
+    }),
     attachment: {
       filename: `${data.client.name} - ${data.monthLabel} report.pdf`.replace(/[\\/:*?"<>|]/g, ''),
       contentType: 'application/pdf',
@@ -404,4 +425,26 @@ export async function sendReportEmail(env: Env, agencyId: string, reportId: stri
     .update(reports)
     .set({ status: 'sent', sentAt: Date.now() })
     .where(eq(reports.id, reportId));
+}
+
+/**
+ * Re-exports the PDF from the report's Google Slides file (after manual edits in Slides)
+ * and replaces the stored PDF. Works for reports that are ready or already sent.
+ */
+export async function refreshReportPdf(env: Env, agencyId: string, reportId: string): Promise<void> {
+  const db = getDb(env);
+  const report = await db.query.reports.findFirst({
+    where: and(eq(reports.id, reportId), eq(reports.agencyId, agencyId)),
+  });
+  if (!report) throw new Error('Report not found');
+  if (!report.slidesFileId) throw new Error('This report has no Google Slides file to export');
+  const conn = await getConnection(env, agencyId, 'agency_workspace');
+  if (!conn) throw new Error('Agency Google account is not connected');
+  const token = await getAccessToken(env, conn);
+  const pdf = await exportPdf(token, report.slidesFileId);
+  await env.KV.put(pdfKvKey(reportId), pdf, { metadata: { contentType: 'application/pdf' } });
+  await db
+    .update(reports)
+    .set({ pdfKvKey: pdfKvKey(reportId), error: null, status: report.status === 'failed' ? 'ready' : report.status })
+    .where(and(eq(reports.id, reportId), eq(reports.agencyId, agencyId)));
 }

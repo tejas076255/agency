@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
-import { csrfProtect, loadSession } from './middleware/auth';
+import { log } from './lib/log';
+import { csrfProtect, loadSession, trackApiUsage } from './middleware/auth';
 import { agencyRoutes } from './routes/agency';
 import { authRoutes } from './routes/auth';
 import { actionItemRoutes, clientRoutes } from './routes/clients';
@@ -24,6 +25,7 @@ app.route('/', publicRoutes); // /r/:token, /api/public/chart/:token
 app.use('/api/*', loadSession);
 app.use('/auth/*', loadSession);
 app.use('/api/*', csrfProtect); // all non-GET /api requests need the CSRF token
+app.use('/api/*', trackApiUsage); // counts Google/AI calls per agency for quota monitoring
 
 app.route('/auth', authRoutes);
 app.route('/api', meRoutes);
@@ -38,6 +40,6 @@ app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
-  console.error('Unhandled error', err);
+  log.error('Unhandled error', err, { path: c.req.path });
   return c.json({ error: 'Something went wrong. Please try again.' }, 500);
 });

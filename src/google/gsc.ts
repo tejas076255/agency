@@ -29,6 +29,7 @@ export type GscSummary = {
     position: number;
   }[];
   /** Keywords ranking at positions 8-20 with decent impressions: small push = page 1 / top 5. */
+  topPages: { page: string; clicks: number; impressions: number; ctr: number; position: number }[];
   quickWins: { query: string; impressions: number; clicks: number; position: number }[];
   /** Pages that lost the most clicks vs the previous period. */
   droppingPages: { page: string; clicksNow: number; clicksBefore: number; change: number }[];
@@ -120,6 +121,17 @@ export function summarizeGsc(input: {
       position: round(r.position),
     }));
 
+  const topPages = [...input.pagesCur]
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, 10)
+    .map((r) => ({
+      page: key(r),
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr: round(r.ctr * 100, 2),
+      position: round(r.position),
+    }));
+
   const before = new Map(input.pagesPrev.map((r) => [key(r), r.clicks]));
   const now = new Map(input.pagesCur.map((r) => [key(r), r.clicks]));
   const droppingPages = [...before.entries()]
@@ -142,6 +154,7 @@ export function summarizeGsc(input: {
     clicksChangePct: nullableRound(pctChange(current.clicks, previous.clicks)),
     impressionsChangePct: nullableRound(pctChange(current.impressions, previous.impressions)),
     topQueries,
+    topPages,
     quickWins,
     droppingPages,
     dailyClicks,

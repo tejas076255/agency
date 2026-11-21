@@ -178,6 +178,28 @@ describe('tenant isolation: agency A vs agency B', () => {
     );
   });
 
+  it("cannot use another agency's Google connection or re-export its report", async () => {
+    expect((await req('user-a', '/api/clients/client-b/google/options')).status).toBe(404);
+    expect(
+      (
+        await req('user-a', '/api/clients/client-b/google/selection', {
+          method: 'PUT',
+          body: { gscSiteUrl: 'sc-domain:b.com', ga4PropertyId: null },
+        })
+      ).status,
+    ).toBe(404);
+    expect((await req('user-a', '/api/reports/report-b/refresh-pdf', { method: 'POST' })).status).toBe(404);
+  });
+
+  it('report history only lists own agency reports', async () => {
+    const res = await req('user-a', '/api/reports');
+    const ids = ((await res.json()) as { reports: { id: string }[] }).reports.map((r) => r.id);
+    expect(ids).not.toContain('report-b');
+    const resB = await req('user-b', '/api/reports');
+    const idsB = ((await resB.json()) as { reports: { id: string }[] }).reports.map((r) => r.id);
+    expect(idsB).toEqual(['report-b']);
+  });
+
   it('job logs only show own agency jobs', async () => {
     const res = await req('user-a', '/api/jobs');
     const jobs = ((await res.json()) as { jobs: { id: string }[] }).jobs.map((j) => j.id);

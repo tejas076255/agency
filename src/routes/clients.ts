@@ -15,6 +15,7 @@ import {
   SCOPE,
 } from '../google/tokens';
 import { enqueueJobs, hasPendingJob } from '../jobs/queue';
+import { auditRequest } from '../lib/audit';
 import { getDb } from '../lib/db';
 import { OAUTH_STATE_COOKIE, startGoogleOAuth } from '../lib/google-oauth';
 import { readJson } from '../lib/validate';
@@ -115,6 +116,11 @@ clientRoutes.post('/', async (c) => {
       updatedAt: now,
     })
     .returning();
+  await auditRequest(c, 'client.create', {
+    targetType: 'client',
+    targetId: row?.id,
+    metadata: { name: input.name, websiteUrl: input.websiteUrl },
+  });
   return c.json({ client: row }, 201);
 });
 
@@ -162,6 +168,8 @@ clientRoutes.get('/:id', async (c) => {
           title: a.title,
           why: a.why,
           expectedImpact: a.expectedImpact,
+          description: a.description,
+          supportingMetrics: parseJson<string[]>(a.supportingMetricsJson) ?? [],
           done: a.done,
         })),
       };
@@ -209,6 +217,7 @@ clientRoutes.get('/:id', async (c) => {
           id: latest.id,
           runAt: latest.runAt,
           score: latest.score,
+          formulaVersion: latest.formulaVersion,
           status: latest.status,
           errors: parseJson<Record<string, string>>(latest.errorsJson) ?? {},
           breakdown: parseJson(latest.scoreBreakdownJson),
@@ -249,6 +258,7 @@ clientRoutes.put('/:id', async (c) => {
     .set({ ...input, updatedAt: Date.now() })
     .where(clientScope(c, client.id))
     .returning();
+  await auditRequest(c, 'client.update', { targetType: 'client', targetId: client.id, metadata: input });
   return c.json({ client: row });
 });
 
@@ -258,6 +268,11 @@ clientRoutes.delete('/:id', async (c) => {
   const conn = await getConnection(c.env, c.get('agencyId'), 'client_data', client.id);
   if (conn) await deleteConnection(c.env, conn);
   await getDb(c.env).delete(clients).where(clientScope(c, client.id));
+  await auditRequest(c, 'client.delete', {
+    targetType: 'client',
+    targetId: client.id,
+    metadata: { name: client.name },
+  });
   return c.json({ ok: true });
 });
 
@@ -352,6 +367,11 @@ clientRoutes.put('/:id/google/selection', async (c) => {
     })
     .where(clientScope(c, client.id))
     .returning();
+  await auditRequest(c, 'client.sources_update', {
+    targetType: 'client',
+    targetId: client.id,
+    metadata: input,
+  });
   return c.json({ client: row });
 });
 
@@ -364,6 +384,7 @@ clientRoutes.delete('/:id/google', async (c) => {
     .update(clients)
     .set({ status: 'not_connected', gscSiteUrl: null, ga4PropertyId: null, updatedAt: Date.now() })
     .where(clientScope(c, client.id));
+  await auditRequest(c, 'google.client_disconnect', { targetType: 'client', targetId: client.id });
   return c.json({ ok: true });
 });
 
@@ -401,6 +422,11 @@ clientRoutes.post('/:id/run', async (c) => {
       send: input.type === 'monthly_report' ? (input.send ?? false) : undefined,
     },
   ]);
+  await auditRequest(c, 'job.run_requested', {
+    targetType: 'client',
+    targetId: client.id,
+    metadata: { type: input.type, jobRunId },
+  });
   return c.json({ jobRunId }, 202);
 });
 

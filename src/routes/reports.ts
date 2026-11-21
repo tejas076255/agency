@@ -4,7 +4,8 @@ import { and, desc, eq } from 'drizzle-orm';
 import { clients, jobRuns, reports } from '../db/schema';
 import { describeError } from '../google/http';
 import { deleteConnection, getConnection, WORKSPACE_SCOPES } from '../google/tokens';
-import { sendReportEmail } from '../jobs/report';
+import { refreshReportPdf, sendReportEmail } from '../jobs/report';
+import { auditRequest } from '../lib/audit';
 import { getDb } from '../lib/db';
 import { OAUTH_STATE_COOKIE, startGoogleOAuth } from '../lib/google-oauth';
 import { currentUser, requireAgency, requireOwner } from '../middleware/auth';
@@ -42,12 +43,58 @@ reportRoutes.get('/:id/pdf', async (c) => {
   });
 });
 
+/** Report history across all (visible) clients, newest first. */
+reportRoutes.get('/', async (c) => {
+  const rows = await getDb(c.env)
+    .select({
+      id: reports.id,
+      clientId: reports.clientId,
+      clientName: clients.name,
+      month: reports.month,
+      status: reports.status,
+      error: reports.error,
+      shareToken: reports.shareToken,
+      slidesFileId: reports.slidesFileId,
+      sentAt: reports.sentAt,
+      createdAt: reports.createdAt,
+    })
+    .from(reports)
+    .innerJoin(clients, and(eq(clients.id, reports.clientId), eq(clients.agencyId, reports.agencyId)))
+    .where(and(eq(reports.agencyId, c.get('agencyId')), clientScope(c)))
+    .orderBy(desc(reports.createdAt))
+    .limit(100);
+  return c.json({
+    reports: rows.map(({ shareToken, ...r }) => ({ ...r, shareUrl: `/r/${shareToken}` })),
+  });
+});
+
 /** "Send manually": email a ready report to the client's contact email. */
 reportRoutes.post('/:id/send', async (c) => {
   const report = await loadReport(c, c.req.param('id'));
   if (!report) return c.json({ error: 'Report not found' }, 404);
   try {
     await sendReportEmail(c.env, c.get('agencyId'), report.id);
+    await auditRequest(c, 'report.send', {
+      targetType: 'report',
+      targetId: report.id,
+      metadata: { month: report.month, clientId: report.clientId },
+    });
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ error: describeError(err) }, 400);
+  }
+});
+
+/**
+ * Manual editing: after the agency edits the report in Google Slides,
+ * re-export the PDF so the email attachment and share link show the edited version.
+ */
+reportRoutes.post('/:id/refresh-pdf', async (c) => {
+  const report = await loadReport(c, c.req.param('id'));
+  if (!report) return c.json({ error: 'Report not found' }, 404);
+  try {
+    await refreshReportPdf(c.env, c.get('agencyId'), report.id);
+    await auditRequest(c, 'report.pdf_refresh', { targetType: 'report', targetId: report.id });
     return c.json({ ok: true });
   } catch (err) {
     return c.json({ error: describeError(err) }, 400);
@@ -120,5 +167,9 @@ workspaceRoutes.post('/connect', requireOwner, async (c) => {
 workspaceRoutes.delete('/', requireOwner, async (c) => {
   const conn = await getConnection(c.env, c.get('agencyId'), 'agency_workspace');
   if (conn) await deleteConnection(c.env, conn);
+  await auditRequest(c, 'google.workspace_disconnect', {
+    targetType: 'agency',
+    targetId: c.get('agencyId'),
+  });
   return c.json({ ok: true });
 });

@@ -1,8 +1,9 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { clients, googleConnections } from '../db/schema';
 import type { Env } from '../env';
-import { decryptSecret, encryptSecret } from '../lib/crypto';
+import { decryptSecret, encryptSecret, keyRingFromEnv, needsReencryption } from '../lib/crypto';
 import { getDb } from '../lib/db';
+import { log } from '../lib/log';
 import { googleRequest, GoogleApiError, ReconnectNeededError } from './http';
 
 // Minimum scopes per flow (Phase 1).
@@ -43,7 +44,7 @@ export async function saveConnection(
     purpose: input.purpose,
     googleEmail: input.googleEmail,
     scopes: input.scopes,
-    encryptedRefreshToken: await encryptSecret(input.refreshToken, env.TOKEN_ENCRYPTION_KEY),
+    encryptedRefreshToken: await encryptSecret(input.refreshToken, keyRingFromEnv(env)),
     connectedByUserId: input.userId,
     connectedAt: Date.now(),
     status: 'active',
@@ -104,16 +105,24 @@ const accessTokenKey = (connectionId: string) => `gat:${connectionId}`;
  */
 export async function getAccessToken(env: Env, conn: Connection): Promise<string> {
   if (conn.status !== 'active') throw new ReconnectNeededError();
+  const ring = keyRingFromEnv(env);
   const cached = await env.KV.get(accessTokenKey(conn.id));
   if (cached) {
     try {
-      return await decryptSecret(cached, env.TOKEN_ENCRYPTION_KEY);
+      return await decryptSecret(cached, ring);
     } catch {
       // Key rotated or corrupted cache: fall through and refresh.
     }
   }
 
-  const refreshToken = await decryptSecret(conn.encryptedRefreshToken, env.TOKEN_ENCRYPTION_KEY);
+  const refreshToken = await decryptSecret(conn.encryptedRefreshToken, ring);
+  // Key rotation: re-encrypt the refresh token with the current key the next time it's used.
+  if (needsReencryption(conn.encryptedRefreshToken, ring)) {
+    await getDb(env)
+      .update(googleConnections)
+      .set({ encryptedRefreshToken: await encryptSecret(refreshToken, ring) })
+      .where(and(eq(googleConnections.id, conn.id), eq(googleConnections.agencyId, conn.agencyId)));
+  }
   let data: { access_token: string; expires_in: number };
   try {
     data = await googleRequest('https://oauth2.googleapis.com/token', {
@@ -137,7 +146,7 @@ export async function getAccessToken(env: Env, conn: Connection): Promise<string
   const ttl = Math.max(60, data.expires_in - 300);
   await env.KV.put(
     accessTokenKey(conn.id),
-    await encryptSecret(data.access_token, env.TOKEN_ENCRYPTION_KEY),
+    await encryptSecret(data.access_token, ring),
     {
       expirationTtl: ttl,
     },
@@ -163,14 +172,14 @@ export async function markRevoked(env: Env, conn: Connection) {
 /** Disconnect: revoke at Google (best effort) and delete our copy. */
 export async function deleteConnection(env: Env, conn: Connection) {
   try {
-    const token = await decryptSecret(conn.encryptedRefreshToken, env.TOKEN_ENCRYPTION_KEY);
+    const token = await decryptSecret(conn.encryptedRefreshToken, keyRingFromEnv(env));
     await fetch('https://oauth2.googleapis.com/revoke', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ token }).toString(),
     });
   } catch (err) {
-    console.warn('Token revoke failed (ignored)', err);
+    log.warn('Token revoke failed (ignored)', err);
   }
   await getDb(env)
     .delete(googleConnections)

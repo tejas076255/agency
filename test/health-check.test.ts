@@ -106,7 +106,7 @@ describe('runHealthCheck', () => {
     const row = await env.DB.prepare(
       `SELECT encrypted_refresh_token AS t FROM google_connections WHERE client_id='c1'`,
     ).first<{ t: string }>();
-    expect(row?.t.startsWith('v1.')).toBe(true);
+    expect(row?.t.startsWith('v2.k1.')).toBe(true);
     expect(row?.t).not.toContain('refresh-c1');
   });
 

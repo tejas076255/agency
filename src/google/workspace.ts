@@ -233,6 +233,7 @@ const utf8B64 = (s: string) => bytesToBase64(new TextEncoder().encode(s));
 /** Builds an RFC 2822 MIME message with an HTML body and one attachment. */
 export function buildMimeMessage(msg: {
   to: string;
+  cc?: string;
   subject: string;
   html: string;
   replyTo?: string;
@@ -241,6 +242,7 @@ export function buildMimeMessage(msg: {
   const boundary = `aa_${randomToken(12)}`;
   const lines = [
     `To: ${noNewlines(msg.to)}`,
+    ...(msg.cc ? [`Cc: ${noNewlines(msg.cc)}`] : []),
     ...(msg.replyTo ? [`Reply-To: ${noNewlines(msg.replyTo)}`] : []),
     `Subject: =?UTF-8?B?${utf8B64(noNewlines(msg.subject))}?=`,
     'MIME-Version: 1.0',

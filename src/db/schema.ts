@@ -54,6 +54,8 @@ export const users = sqliteTable(
       .notNull()
       .default('owner'),
     googleSub: text('google_sub').notNull(),
+    // Incremented by "Log out of all devices"; sessions with an older version become invalid.
+    sessionVersion: integer('session_version').notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [
@@ -128,6 +130,8 @@ export const healthChecks = sqliteTable(
     pagespeedJson: text('pagespeed_json'),
     score: integer('score'),
     scoreBreakdownJson: text('score_breakdown_json'),
+    // 1 = original 40/30/30 formula, 2 = 35/30/25/10 (see docs/HEALTH_SCORE.md).
+    formulaVersion: integer('formula_version').notNull().default(1),
     status: text('status', { enum: ['ok', 'partial', 'failed'] }).notNull(),
     errorsJson: text('errors_json'),
   },
@@ -170,8 +174,11 @@ export const actionItems = sqliteTable(
       .references(() => insights.id, { onDelete: 'cascade' }),
     priority: integer('priority').notNull(), // 1 = most important
     title: text('title').notNull(),
+    description: text('description'),
     why: text('why').notNull(),
     expectedImpact: text('expected_impact').notNull(),
+    /** JSON array of short strings quoting metrics from the health check. */
+    supportingMetricsJson: text('supporting_metrics_json'),
     done: integer('done', { mode: 'boolean' }).notNull().default(false),
     doneAt: integer('done_at'),
   },
@@ -225,9 +232,63 @@ export const jobRuns = sqliteTable(
     }).notNull(),
     error: text('error'),
     attempt: integer('attempt').notNull().default(1),
+    /**
+     * Idempotency key for scheduled jobs, e.g. "health_check:<clientId>:2026-W47".
+     * Unique, so a cron that fires twice can't queue the same work twice. Null for manual runs.
+     */
+    dedupeKey: text('dedupe_key'),
     startedAt: integer('started_at'),
     finishedAt: integer('finished_at'),
     createdAt: createdAt(),
   },
-  (t) => [index('jobs_agency_created_idx').on(t.agencyId, t.createdAt)],
+  (t) => [
+    index('jobs_agency_created_idx').on(t.agencyId, t.createdAt),
+    uniqueIndex('jobs_dedupe_uq').on(t.dedupeKey),
+  ],
+);
+
+/** Who did what, when. Never stores secrets or raw IP addresses. */
+export const auditLogs = sqliteTable(
+  'audit_logs',
+  {
+    id: id(),
+    agencyId: text('agency_id').references(() => agencies.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    action: text('action').notNull(), // e.g. "client.create"
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    /** Salted SHA-256 of the client IP (null if AUDIT_HASH_SALT is not set). */
+    ipHash: text('ip_hash'),
+    metadataJson: text('metadata_json'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('audit_agency_created_idx').on(t.agencyId, t.createdAt)],
+);
+
+/** Per-agency report email settings. */
+export const reportSettings = sqliteTable('report_settings', {
+  agencyId: text('agency_id')
+    .primaryKey()
+    .references(() => agencies.id, { onDelete: 'cascade' }),
+  /** Placeholders: {client}, {month}, {agency} */
+  emailSubject: text('email_subject'),
+  emailMessage: text('email_message'),
+  ccAgency: integer('cc_agency', { mode: 'boolean' }).notNull().default(false),
+  includeHinglish: integer('include_hinglish', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** Daily API call counters per agency, for quota/cost monitoring. */
+export const apiUsage = sqliteTable(
+  'api_usage',
+  {
+    id: id(),
+    agencyId: text('agency_id').references(() => agencies.id, { onDelete: 'cascade' }),
+    api: text('api').notNull(), // gsc, ga4, ga4_admin, pagespeed, slides, drive, gmail, oauth, workers_ai
+    day: text('day').notNull(), // YYYY-MM-DD (IST)
+    calls: integer('calls').notNull().default(0),
+    errors: integer('errors').notNull().default(0),
+    quotaErrors: integer('quota_errors').notNull().default(0),
+  },
+  (t) => [uniqueIndex('usage_agency_api_day_uq').on(t.agencyId, t.api, t.day)],
 );

@@ -4,29 +4,59 @@ import { eq } from 'drizzle-orm';
 import { users } from '../db/schema';
 import { getDb, type User } from '../lib/db';
 import { timingSafeEqual } from '../lib/crypto';
-import { getSession, SESSION_COOKIE } from '../lib/session';
+import {
+  clearSessionCookie,
+  getSession,
+  rotateSession,
+  SESSION_COOKIE,
+  setSessionCookie,
+  shouldRotate,
+} from '../lib/session';
+import { withUsageTracking } from '../lib/usage';
 import type { AppEnv } from '../types';
 
-/** Loads the session (if any) and the logged-in user into c.var. Never blocks. */
+/**
+ * Loads the session (if any) and the logged-in user into c.var. Never blocks.
+ * Also: rejects sessions revoked by "log out everywhere" (version mismatch) and
+ * rotates the session ID once it is older than 24 hours.
+ */
 export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('sessionId', null);
   c.set('session', null);
   c.set('user', null);
   const sid = getCookie(c, SESSION_COOKIE);
   if (sid) {
-    const session = await getSession(c.env.KV, sid);
+    let session = await getSession(c.env.KV, sid);
     if (session) {
       const user = await getDb(c.env).query.users.findFirst({
         where: eq(users.id, session.userId),
       });
-      if (user) {
-        c.set('sessionId', sid);
+      if (user && user.sessionVersion === session.version) {
+        let activeId = sid;
+        if (shouldRotate(session)) {
+          const rotated = await rotateSession(c.env.KV, sid, session);
+          activeId = rotated.id;
+          session = rotated.data;
+          setSessionCookie(c, activeId, session);
+        }
+        c.set('sessionId', activeId);
         c.set('session', session);
         c.set('user', user);
+      } else {
+        clearSessionCookie(c);
       }
+    } else {
+      clearSessionCookie(c);
     }
   }
   await next();
+};
+
+/** Counts Google/AI API calls made while handling this request (per agency, per day). */
+export const trackApiUsage: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const agencyId = c.get('user')?.agencyId;
+  if (!agencyId) return next();
+  await withUsageTracking(c.env, agencyId, () => next());
 };
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {

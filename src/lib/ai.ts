@@ -1,5 +1,13 @@
 import { z } from 'zod';
 import type { Env } from '../env';
+import {
+  buildFallbackInsights,
+  findUngroundedNumbers,
+  type CompactSummary,
+  type InsightResult,
+} from './insights';
+import { log } from './log';
+import { recordApiCall } from './usage';
 
 // ---------------------------------------------------------------------------------------------
 // The ONLY place that talks to an AI model. To switch models/providers, change runModel().
@@ -17,7 +25,7 @@ export async function runModel(
   const ai = env.AI as unknown as AiRunner;
   const input = {
     messages,
-    max_tokens: opts.maxTokens ?? 1500,
+    max_tokens: opts.maxTokens ?? 2000,
     temperature: 0.3,
     ...(opts.jsonSchema
       ? { response_format: { type: 'json_schema', json_schema: opts.jsonSchema } }
@@ -31,11 +39,14 @@ export async function runModel(
       input,
       env.AI_GATEWAY_ID ? { gateway: { id: env.AI_GATEWAY_ID } } : undefined,
     );
+    recordApiCall('workers_ai', { ok: true });
   } catch (err) {
+    recordApiCall('workers_ai', { ok: false });
     // If the gateway isn't set up yet, don't break insights: call the model directly.
     if (env.AI_GATEWAY_ID && /gateway/i.test(String((err as Error)?.message))) {
-      console.warn('AI Gateway call failed, retrying without gateway:', (err as Error).message);
+      log.warn('AI Gateway call failed, retrying without gateway', err);
       result = await ai.run(env.AI_MODEL, input);
+      recordApiCall('workers_ai', { ok: true });
     } else {
       throw err;
     }
@@ -51,8 +62,10 @@ export async function runModel(
 const actionItemSchema = z.object({
   priority: z.number().int().min(1).max(5),
   title: z.string().trim().min(3).max(160),
+  description: z.string().trim().min(10).max(600),
   why: z.string().trim().min(5).max(600),
   expected_impact: z.string().trim().min(3).max(300),
+  supporting_metrics: z.array(z.string().trim().min(2).max(200)).min(1).max(4),
 });
 
 export const insightOutputSchema = z
@@ -68,6 +81,9 @@ export const insightOutputSchema = z
 
 export type InsightOutput = z.infer<typeof insightOutputSchema>;
 
+// Words that promise results (not allowed: the app must never guarantee outcomes).
+const GUARANTEE_RE = /\b(guarantee[sd]?|guaranteed|100% sure|definitely will|assured)\b/i;
+
 /** JSON schema given to the model (Workers AI JSON mode). Zod still validates the result. */
 export function insightJsonSchema(hinglish: boolean) {
   const item = {
@@ -75,10 +91,12 @@ export function insightJsonSchema(hinglish: boolean) {
     properties: {
       priority: { type: 'integer', minimum: 1, maximum: 5 },
       title: { type: 'string' },
+      description: { type: 'string' },
       why: { type: 'string' },
       expected_impact: { type: 'string' },
+      supporting_metrics: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 4 },
     },
-    required: ['priority', 'title', 'why', 'expected_impact'],
+    required: ['priority', 'title', 'description', 'why', 'expected_impact', 'supporting_metrics'],
   };
   return {
     type: 'object',
@@ -91,10 +109,13 @@ export function insightJsonSchema(hinglish: boolean) {
   };
 }
 
-/** Accepts an object or a string (possibly with text around the JSON) and validates it. */
+/**
+ * Accepts an object or a string (possibly with text around the JSON) and validates it.
+ * With `source`, also rejects supporting metrics that quote numbers not present in the data.
+ */
 export function parseInsightOutput(
   raw: unknown,
-  opts: { requireHinglish?: boolean } = {},
+  opts: { requireHinglish?: boolean; source?: CompactSummary } = {},
 ): { ok: true; data: InsightOutput } | { ok: false; error: string } {
   let value = raw;
   if (typeof value === 'string') {
@@ -119,6 +140,22 @@ export function parseInsightOutput(
   if (opts.requireHinglish && !parsed.data.summary_hinglish) {
     return { ok: false, error: 'summary_hinglish is required' };
   }
+  const allText = JSON.stringify(parsed.data);
+  if (GUARANTEE_RE.test(allText)) {
+    return { ok: false, error: 'Do not guarantee results; use words like "could" or "may"' };
+  }
+  if (opts.source) {
+    const bad = findUngroundedNumbers(
+      parsed.data.action_items.flatMap((a) => a.supporting_metrics),
+      opts.source,
+    );
+    if (bad.length > 0) {
+      return {
+        ok: false,
+        error: `supporting_metrics contain numbers that are not in the data: ${bad.slice(0, 5).join(', ')}`,
+      };
+    }
+  }
   const data = {
     ...parsed.data,
     action_items: [...parsed.data.action_items].sort((a, b) => a.priority - b.priority),
@@ -127,49 +164,86 @@ export function parseInsightOutput(
 }
 
 const SYSTEM_PROMPT = `You are a senior SEO and digital marketing consultant for small businesses in India.
-You receive a compact JSON health check for ONE client website (Search Console, Google Analytics 4 and PageSpeed data; some sections may be missing).
-Write for a busy agency owner. Be specific: mention real queries, pages and numbers from the data. Never invent data that is not in the JSON.
+You receive a compact JSON health check for ONE client website (Search Console, Google Analytics 4 and PageSpeed data; some sections may be missing or null).
+Write for a busy agency owner. Be specific: mention real queries, pages and numbers from the data.
+STRICT RULES:
+- Never invent metrics. Only quote numbers that appear in the JSON.
+- Never guarantee results. Use "could", "may", "likely".
+- If a section is missing, you may recommend connecting it, but don't guess its numbers.
 Return ONLY a JSON object with:
 - "summary": 3-5 plain-English sentences on how the site did in the last 28 days vs the previous 28 days and the single biggest issue.
-- "action_items": EXACTLY 5 items, each { "priority": 1-5 (1 = do first, each number used once), "title": short imperative task, "why": the data-backed reason, "expected_impact": realistic outcome (e.g. "+10-20% clicks on these 3 queries in 4-6 weeks") }.
-Prefer quick wins (keywords at positions 8-20), fixing pages that lost clicks, and the top speed opportunities.`;
+- "action_items": EXACTLY 5 items, each:
+  { "priority": 1-5 (1 = do first, each number used once),
+    "title": short imperative task,
+    "description": 1-2 sentences on what exactly to do,
+    "why": the data-backed reason,
+    "expected_impact": realistic, non-guaranteed outcome,
+    "supporting_metrics": 1-4 short strings quoting exact numbers from the JSON (e.g. "\\"seo pune\\": position 11.4, 820 impressions") }.
+Prefer quick wins (keywords at positions 8-20), fixing pages that lost clicks, and the top speed fixes.`;
 
 const HINGLISH_RULE = `
 - "summary_hinglish": the same summary in simple Hinglish (Hindi written in Roman/English letters mixed with common English words), friendly tone.`;
 
+export type GeneratedInsights = {
+  data: InsightResult;
+  model: string;
+  source: 'ai' | 'fallback';
+  /** Why the fallback was used (for logs/UI), if it was. */
+  fallbackReason?: string;
+};
+
+/**
+ * Generates insights with the AI model: validate -> retry once with the error -> deterministic
+ * rule-based fallback. Never throws because of the AI: there are always 5 action items.
+ */
 export async function generateInsights(
   env: Pick<Env, 'AI' | 'AI_MODEL' | 'AI_GATEWAY_ID'>,
-  compactSummary: object,
+  summary: CompactSummary,
   opts: { hinglish?: boolean } = {},
-): Promise<{ data: InsightOutput; model: string }> {
+): Promise<GeneratedInsights> {
   const hinglish = opts.hinglish ?? true;
   const messages: ChatMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT + (hinglish ? HINGLISH_RULE : '') },
-    { role: 'user', content: JSON.stringify(compactSummary) },
+    { role: 'user', content: JSON.stringify(summary) },
   ];
   const schema = insightJsonSchema(hinglish);
+  const parseOpts = { requireHinglish: hinglish, source: summary };
+  const fallback = (reason: string): GeneratedInsights => {
+    log.warn('Using rule-based insights fallback', undefined, { reason });
+    return { data: buildFallbackInsights(summary), model: 'rule-based-fallback', source: 'fallback', fallbackReason: reason };
+  };
 
-  const first = await runModel(env, messages, { jsonSchema: schema });
-  const p1 = parseInsightOutput(first.output, { requireHinglish: hinglish });
-  if (p1.ok) return { data: p1.data, model: first.model };
+  let first: { output: unknown; model: string };
+  try {
+    first = await runModel(env, messages, { jsonSchema: schema });
+  } catch (err) {
+    return fallback(`AI call failed: ${(err as Error).message}`);
+  }
+  const p1 = parseInsightOutput(first.output, parseOpts);
+  if (p1.ok) return { data: p1.data, model: first.model, source: 'ai' };
 
   // Retry once, telling the model exactly what was wrong.
-  const second = await runModel(
-    env,
-    [
-      ...messages,
-      {
-        role: 'assistant',
-        content: typeof first.output === 'string' ? first.output : JSON.stringify(first.output),
-      },
-      {
-        role: 'user',
-        content: `Your previous answer was invalid: ${p1.error}. Reply again with ONLY the corrected JSON object.`,
-      },
-    ],
-    { jsonSchema: schema },
-  );
-  const p2 = parseInsightOutput(second.output, { requireHinglish: hinglish });
-  if (p2.ok) return { data: p2.data, model: second.model };
-  throw new Error(`AI returned invalid output twice: ${p2.error}`);
+  let second: { output: unknown; model: string };
+  try {
+    second = await runModel(
+      env,
+      [
+        ...messages,
+        {
+          role: 'assistant',
+          content: typeof first.output === 'string' ? first.output : JSON.stringify(first.output),
+        },
+        {
+          role: 'user',
+          content: `Your previous answer was invalid: ${p1.error}. Reply again with ONLY the corrected JSON object.`,
+        },
+      ],
+      { jsonSchema: schema },
+    );
+  } catch (err) {
+    return fallback(`AI retry failed: ${(err as Error).message}`);
+  }
+  const p2 = parseInsightOutput(second.output, parseOpts);
+  if (p2.ok) return { data: p2.data, model: second.model, source: 'ai' };
+  return fallback(`AI returned invalid output twice: ${p2.error}`);
 }

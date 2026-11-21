@@ -47,6 +47,7 @@ export type Ga4Totals = {
   users: number;
   keyEvents: number;
   engagementRate: number;
+  newUsers: number;
 };
 
 export type Ga4Summary = {
@@ -55,7 +56,10 @@ export type Ga4Summary = {
   totals: { current: Ga4Totals; previous: Ga4Totals };
   sessionsChangePct: number | null;
   usersChangePct: number | null;
+  newUsersChangePct: number | null;
   keyEventsChangePct: number | null;
+  /** Sessions from the "Organic Search" channel (null if the report wasn't available). */
+  organicSessions: { current: number; previous: number; changePct: number | null } | null;
   topChannels: { channel: string; sessions: number }[];
   topLandingPages: { page: string; sessions: number; keyEvents: number }[];
   dailySessions: { date: string; sessions: number }[];
@@ -76,16 +80,15 @@ export async function fetchGa4Summary(
     { name: 'totalUsers' },
     { name: 'keyEvents' },
     { name: 'engagementRate' },
+    { name: 'newUsers' },
+  ];
+  const bothRanges = [
+    { ...cur, name: 'current' },
+    { startDate: period.previous.start, endDate: period.previous.end, name: 'previous' },
   ];
 
-  const [totals, channels, landing, daily] = await Promise.all([
-    runReport(token, propertyId, {
-      dateRanges: [
-        { ...cur, name: 'current' },
-        { startDate: period.previous.start, endDate: period.previous.end, name: 'previous' },
-      ],
-      metrics,
-    }),
+  const [totals, channels, landing, daily, organic] = await Promise.all([
+    runReport(token, propertyId, { dateRanges: bothRanges, metrics }),
     runReport(token, propertyId, {
       dateRanges: [cur],
       dimensions: [{ name: 'sessionDefaultChannelGroup' }],
@@ -107,8 +110,18 @@ export async function fetchGa4Summary(
       orderBys: [{ dimension: { dimensionName: 'date' } }],
       limit: 100,
     }),
+    runReport(token, propertyId, {
+      dateRanges: bothRanges,
+      metrics: [{ name: 'sessions' }],
+      dimensionFilter: {
+        filter: {
+          fieldName: 'sessionDefaultChannelGroup',
+          stringFilter: { matchType: 'EXACT', value: 'Organic Search' },
+        },
+      },
+    }),
   ]);
-  return summarizeGa4({ propertyId, period, totals, channels, landing, daily });
+  return summarizeGa4({ propertyId, period, totals, channels, landing, daily, organic });
 }
 
 /** Pure function (unit-tested): GA4 reports -> compact summary. */
@@ -119,6 +132,7 @@ export function summarizeGa4(input: {
   channels: Report;
   landing: Report;
   daily: Report;
+  organic?: Report;
 }): Ga4Summary {
   // With two named date ranges GA4 adds a "dateRange" dimension to each row.
   const rows = input.totals.rows ?? [];
@@ -129,8 +143,11 @@ export function summarizeGa4(input: {
       users: num(r, 1),
       keyEvents: num(r, 2),
       engagementRate: round(num(r, 3) * 100),
+      newUsers: num(r, 4),
     };
   };
+  const organicRows = input.organic?.rows;
+  const organicOf = (name: string) => num(organicRows?.find((x) => dim(x) === name), 0);
   const current = pick('current');
   const previous = pick('previous');
   const change = (a: number, b: number) => {
@@ -144,7 +161,15 @@ export function summarizeGa4(input: {
     totals: { current, previous },
     sessionsChangePct: change(current.sessions, previous.sessions),
     usersChangePct: change(current.users, previous.users),
+    newUsersChangePct: change(current.newUsers, previous.newUsers),
     keyEventsChangePct: change(current.keyEvents, previous.keyEvents),
+    organicSessions: input.organic
+      ? {
+          current: organicOf('current'),
+          previous: organicOf('previous'),
+          changePct: change(organicOf('current'), organicOf('previous')),
+        }
+      : null,
     topChannels: (input.channels.rows ?? []).map((r) => ({ channel: dim(r), sessions: num(r, 0) })),
     topLandingPages: (input.landing.rows ?? []).map((r) => ({
       page: dim(r),

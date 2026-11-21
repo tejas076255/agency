@@ -1,4 +1,7 @@
-// One place for calling Google REST APIs: auth header, JSON, retries with exponential backoff.
+// One place for calling Google REST APIs: auth header, JSON, retries with exponential backoff,
+// and per-agency usage counting (quota monitoring).
+import { redactString } from '../lib/log';
+import { apiNameFromUrl, recordApiCall } from '../lib/usage';
 
 export class GoogleApiError extends Error {
   constructor(
@@ -47,6 +50,7 @@ export async function googleRequest<T = unknown>(
   opts: RequestOptions = {},
 ): Promise<T> {
   const retries = opts.retries ?? retryConfig.maxRetries;
+  const api = apiNameFromUrl(url);
   let attempt = 0;
   for (;;) {
     let res: Response;
@@ -68,13 +72,19 @@ export async function googleRequest<T = unknown>(
       });
     } catch (err) {
       // Network error or timeout.
+      recordApiCall(api, { ok: false });
       if (attempt < retries) {
         await sleep(backoff(attempt++));
         continue;
       }
-      throw new GoogleApiError(503, 'network', `Could not reach Google: ${(err as Error).message}`);
+      throw new GoogleApiError(
+        503,
+        'network',
+        `Could not reach Google: ${redactString((err as Error).message)}`,
+      );
     }
 
+    recordApiCall(api, { ok: res.ok, status: res.status });
     if (res.ok) {
       if (opts.responseType === 'bytes') return new Uint8Array(await res.arrayBuffer()) as T;
       if (res.status === 204) return undefined as T;

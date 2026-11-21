@@ -106,6 +106,103 @@ describe('summarizeGa4', () => {
   });
 });
 
+describe('GA4 new users and organic sessions', () => {
+  const mv = (...v: number[]) => v.map((x) => ({ value: String(x) }));
+  const base = {
+    propertyId: '1',
+    period,
+    totals: {
+      rows: [
+        { dimensionValues: [{ value: 'current' }], metricValues: mv(100, 90, 2, 0.5, 60) },
+        { dimensionValues: [{ value: 'previous' }], metricValues: mv(80, 70, 1, 0.5, 40) },
+      ],
+    },
+    channels: {},
+    landing: {},
+    daily: {},
+  };
+  it('reads new users and their change', () => {
+    const s = summarizeGa4(base);
+    expect(s.totals.current.newUsers).toBe(60);
+    expect(s.newUsersChangePct).toBe(50);
+    expect(s.organicSessions).toBeNull(); // organic report not provided
+  });
+  it('reads organic search sessions for both periods', () => {
+    const s = summarizeGa4({
+      ...base,
+      organic: {
+        rows: [
+          { dimensionValues: [{ value: 'current' }], metricValues: mv(45) },
+          { dimensionValues: [{ value: 'previous' }], metricValues: mv(60) },
+        ],
+      },
+    });
+    expect(s.organicSessions).toEqual({ current: 45, previous: 60, changePct: -25 });
+  });
+});
+
+describe('GSC top pages', () => {
+  it('lists the pages with the most clicks', () => {
+    const s = summarizeGsc({
+      siteUrl: 'x',
+      period,
+      totCur: [],
+      totPrev: [],
+      queries: [],
+      pagesCur: [row('/low', 1, 10, 9), row('/top', 50, 900, 3.2)],
+      pagesPrev: [],
+      daily: [],
+    });
+    expect(s.topPages.map((p) => p.page)).toEqual(['/top', '/low']);
+    expect(s.topPages[0]).toMatchObject({ clicks: 50, impressions: 900, position: 3.2 });
+  });
+});
+
+describe('PageSpeed lab vs field data', () => {
+  const lab = {
+    lighthouseResult: {
+      categories: { performance: { score: 0.9 } },
+      audits: { 'largest-contentful-paint': { numericValue: 1800 }, 'first-contentful-paint': { numericValue: 900 } },
+    },
+  };
+  it('passes Core Web Vitals when LCP, CLS and INP are all good (75th percentile)', () => {
+    const r = parsePageSpeed(
+      {
+        ...lab,
+        loadingExperience: {
+          metrics: {
+            LARGEST_CONTENTFUL_PAINT_MS: { percentile: 2100 },
+            CUMULATIVE_LAYOUT_SHIFT_SCORE: { percentile: 5 }, // = 0.05
+            INTERACTION_TO_NEXT_PAINT: { percentile: 150 },
+          },
+        },
+      },
+      'mobile',
+    );
+    expect(r.lab).toEqual({ lcpMs: 1800, cls: null, tbtMs: null, fcpMs: 900 });
+    expect(r.field).toEqual({ source: 'url', lcpMs: 2100, cls: 0.05, inpMs: 150, cwvPassed: true });
+  });
+  it('fails CWV when one metric is poor, and falls back to origin data', () => {
+    const r = parsePageSpeed(
+      {
+        ...lab,
+        loadingExperience: { metrics: {} },
+        originLoadingExperience: {
+          metrics: {
+            LARGEST_CONTENTFUL_PAINT_MS: { percentile: 2100 },
+            CUMULATIVE_LAYOUT_SHIFT_SCORE: { percentile: 30 }, // 0.3 = poor
+          },
+        },
+      },
+      'mobile',
+    );
+    expect(r.field).toMatchObject({ source: 'origin', cls: 0.3, inpMs: null, cwvPassed: false });
+  });
+  it('has no field data for low-traffic sites (lab only)', () => {
+    expect(parsePageSpeed(lab, 'desktop').field).toBeNull();
+  });
+});
+
 describe('parsePageSpeed', () => {
   it('extracts score, vitals and the top 3 opportunities', () => {
     const r = parsePageSpeed(

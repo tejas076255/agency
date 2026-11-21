@@ -1,9 +1,11 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { clients, users } from '../db/schema';
 import { saveConnection, SCOPE } from '../google/tokens';
+import { audit, auditRequest } from '../lib/audit';
 import { getDb } from '../lib/db';
+import { log } from '../lib/log';
 import {
   consumeOAuthState,
   exchangeCodeForTokens,
@@ -78,7 +80,7 @@ authRoutes.get('/google/callback', authLimit, async (c) => {
     try {
       return await completeLogin(c, code, saved);
     } catch (err) {
-      console.error('OAuth login failed', err);
+      log.error('OAuth login failed', err);
       const reason = err instanceof GoogleOAuthError ? err.code : 'server_error';
       return loginError(c, reason === 'email_not_verified' ? reason : 'google_error');
     }
@@ -128,6 +130,11 @@ async function completeConnect(c: Context<AppEnv>, code: string, saved: OAuthSta
         .update(clients)
         .set({ status: 'active', updatedAt: Date.now() })
         .where(and(eq(clients.id, client.id), eq(clients.agencyId, saved.agencyId)));
+      await auditRequest(c, 'google.client_connect', {
+        targetType: 'client',
+        targetId: client.id,
+        metadata: { googleEmail: claims?.email, scopes: tokens.scope },
+      });
       return c.redirect(`/clients/${client.id}?connected=1`, 302);
     }
 
@@ -144,9 +151,14 @@ async function completeConnect(c: Context<AppEnv>, code: string, saved: OAuthSta
       refreshToken: tokens.refresh_token,
       userId: user.id,
     });
+    await auditRequest(c, 'google.workspace_connect', {
+      targetType: 'agency',
+      targetId: saved.agencyId,
+      metadata: { googleEmail: claims?.email },
+    });
     return c.redirect('/settings?connected=1', 302);
   } catch (err) {
-    console.error('OAuth connect failed', err);
+    log.error('OAuth connect failed', err);
     return fail('google_error');
   }
 }
@@ -194,13 +206,35 @@ async function completeLogin(c: Context<AppEnv>, code: string, saved: OAuthState
   // Always issue a fresh session on login (prevents session fixation).
   const oldSid = c.get('sessionId');
   if (oldSid) await destroySession(c.env.KV, oldSid);
-  const session = await createSession(c.env.KV, user.id);
-  setSessionCookie(c, session.id);
+  const session = await createSession(c.env.KV, user.id, user.sessionVersion);
+  setSessionCookie(c, session.id, session.data);
+  await audit(c.env, {
+    action: 'auth.login',
+    agencyId: user.agencyId,
+    userId: user.id,
+    ip: c.req.header('cf-connecting-ip') ?? null,
+  });
 
   return c.redirect(user.agencyId ? '/dashboard' : '/onboarding', 302);
 }
 
 authRoutes.post('/logout', csrfProtect, async (c) => {
+  const sid = c.get('sessionId');
+  if (c.get('user')) await auditRequest(c, 'auth.logout');
+  if (sid) await destroySession(c.env.KV, sid);
+  clearSessionCookie(c);
+  return c.json({ ok: true });
+});
+
+/** "Log out of all devices": bumps the user's session version so every existing session dies. */
+authRoutes.post('/logout-all', csrfProtect, async (c) => {
+  const user = c.get('user');
+  if (!user) return c.json({ error: 'Please sign in' }, 401);
+  await getDb(c.env)
+    .update(users)
+    .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
+    .where(eq(users.id, user.id));
+  await auditRequest(c, 'auth.logout_all');
   const sid = c.get('sessionId');
   if (sid) await destroySession(c.env.KV, sid);
   clearSessionCookie(c);

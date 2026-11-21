@@ -1,3 +1,5 @@
+import { log } from './log';
+
 /** Verifies a Cloudflare Turnstile token server-side. Fails closed. */
 export async function verifyTurnstile(
   secret: string | undefined,
@@ -18,7 +20,7 @@ export async function verifyTurnstile(
     const data = (await res.json()) as { success?: boolean };
     return data.success === true;
   } catch (err) {
-    console.error('Turnstile verification failed', err);
+    log.error('Turnstile verification failed', err);
     return false;
   }
 }

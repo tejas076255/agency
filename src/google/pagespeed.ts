@@ -1,13 +1,32 @@
 import { round } from '../lib/dates';
 import { googleRequest } from './http';
 
-export type SpeedResult = {
-  strategy: 'mobile' | 'desktop';
-  score: number; // 0-100
+/**
+ * LAB data = one simulated Lighthouse test run by Google right now (repeatable, but not real users).
+ * FIELD data = real Chrome users over the last 28 days (Chrome UX Report). Only exists for sites
+ * with enough traffic; may fall back to the whole origin instead of the exact URL.
+ */
+export type FieldData = {
+  source: 'url' | 'origin';
   lcpMs: number | null;
   cls: number | null;
-  /** Real-user INP (Chrome UX Report field data). Null when Google has no field data for the site. */
   inpMs: number | null;
+  /** Core Web Vitals assessment: LCP, CLS (and INP when available) all "good" at the 75th percentile. */
+  cwvPassed: boolean | null;
+};
+
+export type SpeedResult = {
+  strategy: 'mobile' | 'desktop';
+  score: number; // 0-100, Lighthouse performance (lab)
+  lab: { lcpMs: number | null; cls: number | null; tbtMs: number | null; fcpMs: number | null };
+  field: FieldData | null;
+  /** @deprecated kept for health checks saved before lab/field split (use lab/field). */
+  lcpMs: number | null;
+  /** @deprecated */
+  cls: number | null;
+  /** @deprecated real-user INP; use field.inpMs */
+  inpMs: number | null;
+  /** @deprecated */
   tbtMs: number | null;
   opportunities: { title: string; savingsMs: number }[];
 };
@@ -31,8 +50,34 @@ type PsiResponse = {
     categories?: { performance?: { score?: number | null } };
     audits?: Record<string, Audit>;
   };
-  loadingExperience?: { metrics?: Record<string, { percentile?: number }> };
+  loadingExperience?: CruxBlock;
+  originLoadingExperience?: CruxBlock;
 };
+type CruxBlock = { metrics?: Record<string, { percentile?: number; category?: string }> };
+
+/** Core Web Vitals "good" thresholds at the 75th percentile (web.dev/vitals). */
+export const CWV_GOOD = { lcpMs: 2500, inpMs: 200, cls: 0.1 } as const;
+
+/** Pure: Chrome UX Report block -> field metrics + CWV assessment. */
+export function parseFieldData(block: CruxBlock | undefined, source: 'url' | 'origin'): FieldData | null {
+  const m = block?.metrics;
+  if (!m || Object.keys(m).length === 0) return null;
+  const lcp = m.LARGEST_CONTENTFUL_PAINT_MS?.percentile;
+  const inp = m.INTERACTION_TO_NEXT_PAINT?.percentile;
+  const clsRaw = m.CUMULATIVE_LAYOUT_SHIFT_SCORE?.percentile; // CrUX reports CLS x100
+  const cls = clsRaw === undefined ? undefined : clsRaw / 100;
+  let cwvPassed: boolean | null = null;
+  if (lcp !== undefined && cls !== undefined) {
+    cwvPassed = lcp <= CWV_GOOD.lcpMs && cls <= CWV_GOOD.cls && (inp === undefined || inp <= CWV_GOOD.inpMs);
+  }
+  return {
+    source,
+    lcpMs: lcp ?? null,
+    cls: cls === undefined ? null : round(cls, 3),
+    inpMs: inp ?? null,
+    cwvPassed,
+  };
+}
 
 export async function fetchPageSpeed(
   apiKey: string,
@@ -73,13 +118,26 @@ export function parsePageSpeed(data: PsiResponse, strategy: 'mobile' | 'desktop'
   const lcp = metric('largest-contentful-paint');
   const tbt = metric('total-blocking-time');
   const cls = metric('cumulative-layout-shift');
+  const fcp = metric('first-contentful-paint');
+  const lab = {
+    lcpMs: lcp === null ? null : Math.round(lcp),
+    cls: cls === null ? null : round(cls, 3),
+    tbtMs: tbt === null ? null : Math.round(tbt),
+    fcpMs: fcp === null ? null : Math.round(fcp),
+  };
+  // Prefer field data for this exact URL; fall back to the whole origin.
+  const field =
+    parseFieldData(data.loadingExperience, 'url') ??
+    parseFieldData(data.originLoadingExperience, 'origin');
   return {
     strategy,
     score: Math.round(perf * 100),
-    lcpMs: lcp === null ? null : Math.round(lcp),
-    cls: cls === null ? null : round(cls, 3),
-    inpMs: data.loadingExperience?.metrics?.INTERACTION_TO_NEXT_PAINT?.percentile ?? null,
-    tbtMs: tbt === null ? null : Math.round(tbt),
+    lab,
+    field,
+    lcpMs: lab.lcpMs,
+    cls: lab.cls,
+    inpMs: field?.inpMs ?? null,
+    tbtMs: lab.tbtMs,
     opportunities,
   };
 }

@@ -2,29 +2,44 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 import { clients, jobRuns } from '../db/schema';
 import type { Env, JobMessage } from '../env';
 import { describeError, GoogleApiError, ReconnectNeededError } from '../google/http';
-import { istMonth, previousIstMonth } from '../lib/dates';
+import { istDate, istMonth, previousIstMonth } from '../lib/dates';
 import { getDb } from '../lib/db';
+import { log } from '../lib/log';
+import { withUsageTracking } from '../lib/usage';
 import { runHealthCheck } from './health-check';
 import { generateReport } from './report';
 
 export const CRON_WEEKLY_HEALTH = '30 0 * * 1'; // Monday 06:00 IST
 export const CRON_MONTHLY_REPORT = '30 0 1 * *'; // 1st of month 06:00 IST
+export const DLQ_NAME = 'agency-jobs-dlq';
 const MAX_ATTEMPTS = 3;
+const STALE_RUNNING_MS = 20 * 60 * 1000;
 
 type JobType = JobMessage['type'];
 
-/** Creates job_run rows and enqueues one message per client. */
-export async function enqueueJobs(
-  env: Env,
-  jobs: {
-    agencyId: string;
-    clientId: string;
-    type: JobType;
-    trigger: 'cron' | 'manual';
-    month?: string;
-    send?: boolean;
-  }[],
-): Promise<string[]> {
+/** ISO-8601 week of an IST date, e.g. "2026-W47" (used in weekly dedupe keys). */
+export function isoWeek(ms: number): string {
+  const d = new Date(`${istDate(ms)}T00:00:00Z`);
+  const day = d.getUTCDay() || 7; // Mon=1..Sun=7
+  d.setUTCDate(d.getUTCDate() + 4 - day); // Thursday of this week decides the year
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  const week = Math.ceil(((d.getTime() - yearStart) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+export type JobRequest = {
+  agencyId: string;
+  clientId: string;
+  type: JobType;
+  trigger: 'cron' | 'manual';
+  month?: string;
+  send?: boolean;
+  /** Scheduled jobs pass one; a duplicate key is silently skipped (idempotent cron). */
+  dedupeKey?: string;
+};
+
+/** Creates job_run rows and enqueues one message per client. Returns ids of jobs actually queued. */
+export async function enqueueJobs(env: Env, jobs: JobRequest[]): Promise<string[]> {
   if (jobs.length === 0) return [];
   const db = getDb(env);
   const now = Date.now();
@@ -36,27 +51,41 @@ export async function enqueueJobs(
     trigger: j.trigger,
     status: 'queued' as const,
     attempt: 0,
+    dedupeKey: j.dedupeKey ?? null,
     createdAt: now,
   }));
-  // D1 limits bound parameters per statement, so insert in small chunks.
-  for (let i = 0; i < rows.length; i += 10) await db.insert(jobRuns).values(rows.slice(i, i + 10));
 
-  const messages = rows.map((r, i) => ({
-    body: {
-      jobRunId: r.id,
-      agencyId: r.agencyId,
-      clientId: r.clientId,
-      type: r.type,
-      month: jobs[i]!.month,
-      send: jobs[i]!.send,
-    } satisfies JobMessage,
-  }));
-  for (let i = 0; i < messages.length; i += 100)
+  // D1 limits bound parameters per statement, so insert in small chunks.
+  const inserted = new Set<string>();
+  for (let i = 0; i < rows.length; i += 8) {
+    const res = await db
+      .insert(jobRuns)
+      .values(rows.slice(i, i + 8))
+      .onConflictDoNothing({ target: jobRuns.dedupeKey })
+      .returning({ id: jobRuns.id });
+    for (const r of res) inserted.add(r.id);
+  }
+
+  const messages = rows
+    .map((r, i) => ({ r, j: jobs[i]! }))
+    .filter(({ r }) => inserted.has(r.id))
+    .map(({ r, j }) => ({
+      body: {
+        jobRunId: r.id,
+        agencyId: r.agencyId,
+        clientId: r.clientId,
+        type: r.type,
+        month: j.month,
+        send: j.send,
+      } satisfies JobMessage,
+    }));
+  for (let i = 0; i < messages.length; i += 100) {
     await env.JOBS_QUEUE.sendBatch(messages.slice(i, i + 100));
-  return rows.map((r) => r.id);
+  }
+  return messages.map((m) => m.body.jobRunId);
 }
 
-/** Cron entry point: fan out one queue message per client. */
+/** Cron entry point: fan out one queue message per client. Safe to run twice (dedupe keys). */
 export async function handleCron(cron: string, env: Env, now = Date.now()) {
   const db = getDb(env);
   if (cron === CRON_MONTHLY_REPORT) {
@@ -67,7 +96,7 @@ export async function handleCron(cron: string, env: Env, now = Date.now()) {
       .from(clients)
       .where(eq(clients.status, 'active'));
     const month = previousIstMonth(now);
-    await enqueueJobs(
+    const queued = await enqueueJobs(
       env,
       list.map((c) => ({
         agencyId: c.agencyId,
@@ -76,26 +105,29 @@ export async function handleCron(cron: string, env: Env, now = Date.now()) {
         trigger: 'cron',
         month,
         send: c.autoSend,
+        dedupeKey: `monthly_report:${c.id}:${month}`,
       })),
     );
-    console.log(`Monthly report cron: queued ${list.length} clients for ${month}`);
+    log.info(`Monthly report cron: queued ${queued.length}/${list.length} clients for ${month}`);
     return;
   }
   // Weekly health check for every client (PageSpeed works even without a Google connection).
+  const week = isoWeek(now);
   const list = await db
     .select({ id: clients.id, agencyId: clients.agencyId })
     .from(clients)
     .where(ne(clients.status, 'reconnect_needed'));
-  await enqueueJobs(
+  const queued = await enqueueJobs(
     env,
     list.map((c) => ({
       agencyId: c.agencyId,
       clientId: c.id,
       type: 'health_check',
       trigger: 'cron',
+      dedupeKey: `health_check:${c.id}:${week}`,
     })),
   );
-  console.log(`Weekly health cron: queued ${list.length} clients`);
+  log.info(`Weekly health cron: queued ${queued.length}/${list.length} clients for ${week}`);
 }
 
 function isTransient(err: unknown): boolean {
@@ -108,6 +140,14 @@ async function processMessage(env: Env, msg: Message<JobMessage>) {
   const db = getDb(env);
   const job = msg.body;
   const where = and(eq(jobRuns.id, job.jobRunId), eq(jobRuns.agencyId, job.agencyId));
+
+  // Queues deliver at least once: skip messages whose job already finished (or no longer exists).
+  const current = await db.query.jobRuns.findFirst({ where });
+  if (!current || ['success', 'partial', 'failed'].includes(current.status)) {
+    msg.ack();
+    return;
+  }
+
   await db
     .update(jobRuns)
     .set({ status: 'running', attempt: msg.attempts, startedAt: Date.now() })
@@ -147,7 +187,7 @@ async function processMessage(env: Env, msg: Message<JobMessage>) {
     }
     msg.ack();
   } catch (err) {
-    console.error(`Job ${job.type} failed for client ${job.clientId}`, err);
+    log.error(`Job ${job.type} failed`, err, { clientId: job.clientId, jobRunId: job.jobRunId });
     const message = describeError(err).slice(0, 1000);
     // Monthly reports are not retried automatically (a partial retry could email twice).
     if (job.type === 'health_check' && isTransient(err) && msg.attempts < MAX_ATTEMPTS) {
@@ -155,7 +195,7 @@ async function processMessage(env: Env, msg: Message<JobMessage>) {
         .update(jobRuns)
         .set({ status: 'queued', error: `Retrying: ${message}` })
         .where(where);
-      msg.retry({ delaySeconds: 60 * msg.attempts });
+      msg.retry({ delaySeconds: 60 * 2 ** (msg.attempts - 1) }); // 1, 2, 4 min backoff
     } else {
       await db
         .update(jobRuns)
@@ -166,9 +206,35 @@ async function processMessage(env: Env, msg: Message<JobMessage>) {
   }
 }
 
+/** Messages that exhausted queue retries land in the DLQ: record them as failed. */
+async function processDeadLetter(env: Env, msg: Message<JobMessage>) {
+  const job = msg.body;
+  await getDb(env)
+    .update(jobRuns)
+    .set({
+      status: 'failed',
+      error: 'Gave up after repeated crashes (moved to dead-letter queue)',
+      finishedAt: Date.now(),
+    })
+    .where(
+      and(
+        eq(jobRuns.id, job.jobRunId),
+        eq(jobRuns.agencyId, job.agencyId),
+        inArray(jobRuns.status, ['queued', 'running']),
+      ),
+    );
+  msg.ack();
+}
+
 /** Queue consumer: each message is handled on its own; one failure never affects the others. */
 export async function handleQueueBatch(batch: MessageBatch<JobMessage>, env: Env) {
-  for (const msg of batch.messages) await processMessage(env, msg);
+  for (const msg of batch.messages) {
+    if (batch.queue === DLQ_NAME) {
+      await processDeadLetter(env, msg);
+      continue;
+    }
+    await withUsageTracking(env, msg.body.agencyId, () => processMessage(env, msg));
+  }
 }
 
 /** True if a job of this type for this client is already waiting or running (prevents double clicks). */
@@ -185,6 +251,6 @@ export async function hasPendingJob(env: Env, agencyId: string, clientId: string
       ),
     )
     .limit(1);
-  // Ignore stale "running" rows older than 20 minutes (e.g. a crashed worker).
-  return row.length > 0 && Date.now() - row[0]!.createdAt < 20 * 60 * 1000;
+  // Ignore stale "running" rows (e.g. a crashed worker).
+  return row.length > 0 && Date.now() - row[0]!.createdAt < STALE_RUNNING_MS;
 }

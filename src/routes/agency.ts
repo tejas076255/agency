@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { agencies, files, users } from '../db/schema';
+import { agencies, auditLogs, files, reportSettings, users } from '../db/schema';
+import { auditRequest } from '../lib/audit';
 import { bytesToBase64 } from '../lib/crypto';
 import { getDb, type Agency } from '../lib/db';
+import { loadReportSettings } from '../lib/report-settings';
+import { getUsage } from '../lib/usage';
 import { readJson } from '../lib/validate';
 import { currentUser, requireAgency, requireAuth, requireOwner } from '../middleware/auth';
 import type { AppEnv } from '../types';
@@ -51,6 +54,12 @@ agencyRoutes.post('/', requireAuth, async (c) => {
     db.insert(agencies).values(agency),
     db.update(users).set({ agencyId: agency.id, role: 'owner' }).where(eq(users.id, user.id)),
   ]);
+  await auditRequest(c, 'agency.create', {
+    agencyId: agency.id,
+    targetType: 'agency',
+    targetId: agency.id,
+    metadata: { name: agency.name },
+  });
   return c.json({ agency: agencyDto(agency) }, 201);
 });
 
@@ -70,6 +79,7 @@ agencyRoutes.put('/', requireAgency, requireOwner, async (c) => {
     .where(eq(agencies.id, c.get('agencyId')))
     .returning();
   if (!agency) return c.json({ error: 'Agency not found' }, 404);
+  await auditRequest(c, 'agency.update', { targetType: 'agency', targetId: agency.id, metadata: input });
   return c.json({ agency: agencyDto(agency) });
 });
 
@@ -128,6 +138,11 @@ agencyRoutes.post('/logo', requireAgency, requireOwner, async (c) => {
   } else {
     await db.batch(statements);
   }
+  await auditRequest(c, 'agency.logo_update', {
+    targetType: 'file',
+    targetId: fileId,
+    metadata: { contentType, sizeBytes: bytes.length },
+  });
   return c.json({ agency: agencyDto({ ...agency, logoFileId: fileId }) });
 });
 
@@ -142,5 +157,61 @@ agencyRoutes.delete('/logo', requireAgency, requireOwner, async (c) => {
       db.delete(files).where(and(eq(files.id, agency.logoFileId), eq(files.agencyId, agencyId))),
     ]);
   }
+  await auditRequest(c, 'agency.logo_delete', { targetType: 'agency', targetId: agencyId });
   return c.json({ agency: agencyDto({ ...agency, logoFileId: null }) });
+});
+
+// ---------------------------------- Report settings ----------------------------------
+
+const reportSettingsInput = z.object({
+  emailSubject: z.string().trim().min(3).max(150),
+  emailMessage: z.string().trim().min(3).max(1000),
+  ccAgency: z.boolean(),
+  includeHinglish: z.boolean(),
+});
+
+agencyRoutes.get('/report-settings', requireAgency, async (c) => {
+  return c.json({ settings: await loadReportSettings(c.env, c.get('agencyId')) });
+});
+
+agencyRoutes.put('/report-settings', requireAgency, requireOwner, async (c) => {
+  const input = await readJson(c, reportSettingsInput);
+  const agencyId = c.get('agencyId');
+  await getDb(c.env)
+    .insert(reportSettings)
+    .values({ agencyId, ...input, updatedAt: Date.now() })
+    .onConflictDoUpdate({ target: reportSettings.agencyId, set: { ...input, updatedAt: Date.now() } });
+  await auditRequest(c, 'agency.report_settings_update', { targetType: 'agency', targetId: agencyId });
+  return c.json({ settings: input });
+});
+
+// ------------------------------- Audit log & API usage -------------------------------
+
+agencyRoutes.get('/audit-logs', requireAgency, requireOwner, async (c) => {
+  const rows = await getDb(c.env)
+    .select({
+      id: auditLogs.id,
+      action: auditLogs.action,
+      targetType: auditLogs.targetType,
+      targetId: auditLogs.targetId,
+      metadataJson: auditLogs.metadataJson,
+      createdAt: auditLogs.createdAt,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(auditLogs)
+    .leftJoin(users, eq(users.id, auditLogs.userId))
+    .where(eq(auditLogs.agencyId, c.get('agencyId')))
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(200);
+  return c.json({
+    logs: rows.map(({ metadataJson, ...r }) => ({
+      ...r,
+      metadata: metadataJson ? (JSON.parse(metadataJson) as Record<string, unknown>) : null,
+    })),
+  });
+});
+
+agencyRoutes.get('/usage', requireAgency, async (c) => {
+  return c.json({ usage: await getUsage(c.env, c.get('agencyId'), 7) });
 });

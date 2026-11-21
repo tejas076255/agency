@@ -12,13 +12,19 @@ export interface Env {
   AI_MODEL: string;
   AI_GATEWAY_ID: string;
   TURNSTILE_SITE_KEY: string;
+  /** Id of TOKEN_ENCRYPTION_KEY (stored inside every ciphertext). Default "k1". */
+  TOKEN_ENCRYPTION_KEY_ID?: string;
 
   // Secrets (.dev.vars locally, `wrangler secret put` in production)
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   TOKEN_ENCRYPTION_KEY: string;
+  /** Optional, only during key rotation: "<old id>:<old base64 key>". */
+  TOKEN_ENCRYPTION_KEY_PREVIOUS?: string;
   PAGESPEED_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
+  /** Optional salt for hashing IPs in audit logs. Without it, IPs are not recorded at all. */
+  AUDIT_HASH_SALT?: string;
 }
 
 // One queue message = one client + one job. A failing client never blocks others.

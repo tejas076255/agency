@@ -8,7 +8,9 @@ import { fetchPageSpeedSummary, type PageSpeedSummary } from '../google/pagespee
 import { getAccessToken, getConnection, hasScope, SCOPE } from '../google/tokens';
 import { generateInsights } from '../lib/ai';
 import { getDb } from '../lib/db';
-import { computeHealthScore, type ScoreResult } from '../lib/score';
+import { buildCompactSummary } from '../lib/insights';
+import { log } from '../lib/log';
+import { computeHealthScore } from '../lib/score';
 
 export type SourceErrors = Partial<Record<'gsc' | 'ga4' | 'pagespeed' | 'ai', string>>;
 
@@ -18,61 +20,6 @@ export type HealthCheckResult = {
   score: number | null;
   errors: SourceErrors;
 };
-
-type Client = typeof clients.$inferSelect;
-
-/** Small JSON sent to the AI (not raw API data): keeps tokens low and avoids leaking noise. */
-export function buildCompactSummary(
-  client: Pick<Client, 'name' | 'websiteUrl'>,
-  gsc: GscSummary | null,
-  ga4: Ga4Summary | null,
-  psi: PageSpeedSummary | null,
-  score: ScoreResult,
-) {
-  return {
-    client: client.name,
-    website: client.websiteUrl,
-    health_score: score.score,
-    search_console: gsc && {
-      period: `${gsc.period.current.start} to ${gsc.period.current.end}`,
-      clicks: gsc.totals.current.clicks,
-      clicks_prev: gsc.totals.previous.clicks,
-      clicks_change_pct: gsc.clicksChangePct,
-      impressions: gsc.totals.current.impressions,
-      avg_position: Math.round(gsc.totals.current.position * 10) / 10,
-      ctr_pct: Math.round(gsc.totals.current.ctr * 1000) / 10,
-      top_queries: gsc.topQueries
-        .slice(0, 5)
-        .map((q) => ({ q: q.query, clicks: q.clicks, pos: q.position })),
-      quick_wins: gsc.quickWins
-        .slice(0, 5)
-        .map((q) => ({ q: q.query, impressions: q.impressions, pos: q.position })),
-      dropping_pages: gsc.droppingPages
-        .slice(0, 3)
-        .map((p) => ({ page: p.page, before: p.clicksBefore, now: p.clicksNow })),
-    },
-    analytics: ga4 && {
-      sessions: ga4.totals.current.sessions,
-      sessions_change_pct: ga4.sessionsChangePct,
-      users: ga4.totals.current.users,
-      key_events: ga4.totals.current.keyEvents,
-      key_events_change_pct: ga4.keyEventsChangePct,
-      engagement_rate_pct: ga4.totals.current.engagementRate,
-      top_channels: ga4.topChannels.slice(0, 4),
-      top_landing_pages: ga4.topLandingPages.slice(0, 3),
-    },
-    speed: psi && {
-      mobile: psi.mobile && {
-        score: psi.mobile.score,
-        lcp_ms: psi.mobile.lcpMs,
-        cls: psi.mobile.cls,
-        inp_ms: psi.mobile.inpMs,
-        top_fixes: psi.mobile.opportunities.map((o) => o.title),
-      },
-      desktop: psi.desktop && { score: psi.desktop.score },
-    },
-  };
-}
 
 export async function runHealthCheck(
   env: Env,
@@ -134,18 +81,26 @@ export async function runHealthCheck(
   const psi = value(psiR, 'pagespeed');
 
   const score = computeHealthScore({
-    seo: gsc && {
+    search: gsc && {
       hasData: gsc.totals.current.impressions > 0 || gsc.totals.previous.impressions > 0,
       clicksChangePct: gsc.clicksChangePct,
-      avgPosition: gsc.totals.current.position,
-      ctrPct: gsc.totals.current.ctr * 100,
+      impressionsChangePct: gsc.impressionsChangePct,
+      avgPosition: gsc.totals.current.impressions > 0 ? gsc.totals.current.position : null,
+      ctrPct: gsc.totals.current.impressions > 0 ? gsc.totals.current.ctr * 100 : null,
     },
     traffic: ga4 && {
       hasData: ga4.totals.current.sessions > 0 || ga4.totals.previous.sessions > 0,
+      organicSessionsChangePct: ga4.organicSessions ? ga4.organicSessions.changePct : undefined,
       sessionsChangePct: ga4.sessionsChangePct,
       engagementRatePct: ga4.totals.current.engagementRate,
+      keyEventsChangePct: ga4.keyEventsChangePct,
     },
-    speed: psi && { mobile: psi.mobile?.score ?? null, desktop: psi.desktop?.score ?? null },
+    performance: psi && {
+      mobile: psi.mobile?.score ?? null,
+      desktop: psi.desktop?.score ?? null,
+      cwvPassed: psi.mobile?.field?.cwvPassed ?? null,
+    },
+    sources: { gsc: gsc !== null, ga4: ga4 !== null, pagespeed: psi !== null },
   });
 
   const attempted = [gsc, ga4, psi];
@@ -164,20 +119,23 @@ export async function runHealthCheck(
     pagespeedJson: psi ? JSON.stringify(psi) : null,
     score: score.score,
     scoreBreakdownJson: JSON.stringify(score.breakdown),
+    formulaVersion: score.formulaVersion,
     status,
     errorsJson: Object.keys(errors).length ? JSON.stringify(errors) : null,
   });
 
-  // AI insights (only when there is some data to talk about).
+  // AI insights (only when there is some data to talk about). generateInsights never fails
+  // because of the AI: it falls back to rule-based insights.
   if (succeeded > 0) {
     try {
-      const { data, model } = await generateInsights(
+      const { data, model, source, fallbackReason } = await generateInsights(
         env,
-        buildCompactSummary(client, gsc, ga4, psi, score),
-        {
-          hinglish: true,
-        },
+        buildCompactSummary(client, gsc, ga4, psi, score.score),
+        { hinglish: true },
       );
+      if (source === 'fallback') {
+        errors.ai = `AI unavailable, used rule-based recommendations (${fallbackReason ?? 'unknown reason'})`.slice(0, 300);
+      }
       const insightId = crypto.randomUUID();
       await db.batch([
         db.insert(insights).values({
@@ -197,15 +155,20 @@ export async function runHealthCheck(
             insightId,
             priority: a.priority,
             title: a.title,
+            description: a.description,
             why: a.why,
             expectedImpact: a.expected_impact,
+            supportingMetricsJson: JSON.stringify(a.supporting_metrics),
             done: false,
           })),
         ),
       ]);
     } catch (err) {
-      console.error('AI insights failed', err);
+      // Only DB problems end up here (the AI itself has a fallback).
+      log.error('Saving insights failed', err);
       errors.ai = describeError(err);
+    }
+    if (errors.ai) {
       await db
         .update(healthChecks)
         .set({ errorsJson: JSON.stringify(errors), status: status === 'ok' ? 'partial' : status })
