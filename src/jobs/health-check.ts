@@ -9,10 +9,13 @@ import { getAccessToken, getConnection, hasScope, SCOPE } from '../google/tokens
 import { generateInsights } from '../lib/ai';
 import { getDb } from '../lib/db';
 import { buildCompactSummary } from '../lib/insights';
+import { reviewStats, syncIntegrations } from './integrations';
 import { log } from '../lib/log';
 import { computeHealthScore } from '../lib/score';
 
-export type SourceErrors = Partial<Record<'gsc' | 'ga4' | 'pagespeed' | 'ai', string>>;
+export type SourceErrors = Partial<
+  Record<'gsc' | 'ga4' | 'pagespeed' | 'ai' | 'gbp' | 'ads' | 'youtube' | 'sentiment', string>
+>;
 
 export type HealthCheckResult = {
   healthCheckId: string;
@@ -70,7 +73,14 @@ export async function runHealthCheck(
   };
 
   // One failing source never blocks the others (partial results).
-  const [gscR, ga4R, psiR] = await Promise.allSettled([gscTask(), ga4Task(), psiTask()]);
+  // Phase 2/3 products (Business Profile, Ads, YouTube) sync in parallel; they never throw.
+  const [gscR, ga4R, psiR, integrations] = await Promise.all([
+    Promise.allSettled([gscTask()]).then((r) => r[0]),
+    Promise.allSettled([ga4Task()]).then((r) => r[0]),
+    Promise.allSettled([psiTask()]).then((r) => r[0]),
+    syncIntegrations(env, client),
+  ]);
+  Object.assign(errors, integrations.errors);
   const value = <T>(r: PromiseSettledResult<T | null>, key: keyof SourceErrors): T | null => {
     if (r.status === 'fulfilled') return r.value;
     errors[key] = describeError(r.reason);
@@ -130,7 +140,12 @@ export async function runHealthCheck(
     try {
       const { data, model, source, fallbackReason } = await generateInsights(
         env,
-        buildCompactSummary(client, gsc, ga4, psi, score.score),
+        buildCompactSummary(client, gsc, ga4, psi, score.score, {
+          gbp: integrations.gbp,
+          ads: integrations.ads,
+          youtube: integrations.youtube,
+          reviews: await reviewStats(env, agencyId, clientId),
+        }),
         { hinglish: true },
       );
       if (source === 'fallback') {

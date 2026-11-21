@@ -111,6 +111,10 @@ export function sampleSummary(overrides: Partial<CompactSummary> = {}): CompactS
       },
       desktop: { lighthouse_score: 81 },
     },
+    local_business: null,
+    reviews_last_30_days: null,
+    google_ads: null,
+    youtube: null,
     ...overrides,
   };
 }

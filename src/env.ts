@@ -25,6 +25,18 @@ export interface Env {
   TURNSTILE_SECRET_KEY: string;
   /** Optional salt for hashing IPs in audit logs. Without it, IPs are not recorded at all. */
   AUDIT_HASH_SALT?: string;
+
+  // ---- Phase 2 / 3 (optional: features show "not configured" until set) ----
+  /** Places API (New) key, restricted to Places API. Needs billing. */
+  PLACES_API_KEY?: string;
+  /** Cloud Natural Language API key, restricted to that API. Needs billing. */
+  NATURAL_LANGUAGE_API_KEY?: string;
+  /** Google Ads developer token (from a manager account; Basic Access for real accounts). */
+  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
+  /** Optional manager (MCC) customer id used as login-customer-id. */
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
+  /** Google Ads REST API version, e.g. "v21". Update when Google sunsets versions. */
+  GOOGLE_ADS_API_VERSION?: string;
 }
 
 // One queue message = one client + one job. A failing client never blocks others.

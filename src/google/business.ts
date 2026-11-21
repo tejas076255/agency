@@ -1,0 +1,365 @@
+// Google Business Profile (Phase 2): Account Management, Business Information, Performance,
+// and reviews (My Business v4). All need OAuth scope business.manage AND Google's approval of
+// Business Profile API access for the Cloud project (quota is 0 until approved).
+import { comparePeriods, pctChange, round, type DateRange } from '../lib/dates';
+import { googleRequest, GoogleApiError } from './http';
+
+export class GbpNotApprovedError extends Error {
+  constructor() {
+    super(
+      'Business Profile API access is not approved for this Google Cloud project yet (quota is 0). Apply at https://developers.google.com/my-business/content/prereqs',
+    );
+    this.name = 'GbpNotApprovedError';
+  }
+}
+
+/** Google returns 429 "quota 0" or 403 for projects without Business Profile API access. */
+function translate(err: unknown): never {
+  if (err instanceof GoogleApiError) {
+    const m = err.message.toLowerCase();
+    if (
+      (err.status === 429 && (m.includes('quota') || m.includes('rate'))) ||
+      (err.status === 403 &&
+        (m.includes('has not been used') ||
+          m.includes('disabled') ||
+          m.includes('not been approved')))
+    ) {
+      throw new GbpNotApprovedError();
+    }
+  }
+  throw err;
+}
+
+async function gbp<T>(
+  url: string,
+  token: string,
+  opts: { method?: 'GET' | 'PUT'; json?: unknown } = {},
+) {
+  try {
+    // Low default quotas: only 1 retry so we don't burn the per-minute quota.
+    return await googleRequest<T>(url, { accessToken: token, retries: 1, ...opts });
+  } catch (err) {
+    translate(err);
+  }
+}
+
+export type GbpAccount = { name: string; accountName: string; type?: string };
+export type GbpLocationOption = {
+  name: string;
+  title: string;
+  address: string;
+  accountName: string;
+};
+
+export async function listGbpAccounts(token: string): Promise<GbpAccount[]> {
+  const out: GbpAccount[] = [];
+  let pageToken: string | undefined;
+  do {
+    const u = new URL('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
+    u.searchParams.set('pageSize', '20');
+    if (pageToken) u.searchParams.set('pageToken', pageToken);
+    const data = await gbp<{ accounts?: GbpAccount[]; nextPageToken?: string }>(
+      u.toString(),
+      token,
+    );
+    out.push(...(data?.accounts ?? []));
+    pageToken = data?.nextPageToken;
+  } while (pageToken && out.length < 100);
+  return out;
+}
+
+type RawLocation = {
+  name: string;
+  title?: string;
+  storefrontAddress?: {
+    addressLines?: string[];
+    locality?: string;
+    administrativeArea?: string;
+    postalCode?: string;
+  };
+  phoneNumbers?: { primaryPhone?: string };
+  websiteUri?: string;
+  categories?: {
+    primaryCategory?: { displayName?: string };
+    additionalCategories?: { displayName?: string }[];
+  };
+  regularHours?: {
+    periods?: {
+      openDay?: string;
+      openTime?: { hours?: number; minutes?: number };
+      closeTime?: { hours?: number; minutes?: number };
+    }[];
+  };
+  openInfo?: { status?: string };
+  metadata?: { mapsUri?: string; placeId?: string; hasVoiceOfMerchant?: boolean };
+};
+
+const READ_MASK =
+  'name,title,storefrontAddress,phoneNumbers,websiteUri,categories,regularHours,openInfo,metadata';
+
+export function formatAddress(a: RawLocation['storefrontAddress']): string {
+  if (!a) return '';
+  return [...(a.addressLines ?? []), a.locality, a.administrativeArea, a.postalCode]
+    .filter(Boolean)
+    .join(', ');
+}
+
+export async function listGbpLocations(
+  token: string,
+  accountName: string,
+): Promise<GbpLocationOption[]> {
+  const out: GbpLocationOption[] = [];
+  let pageToken: string | undefined;
+  do {
+    const u = new URL(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations`,
+    );
+    u.searchParams.set('readMask', 'name,title,storefrontAddress');
+    u.searchParams.set('pageSize', '100');
+    if (pageToken) u.searchParams.set('pageToken', pageToken);
+    const data = await gbp<{ locations?: RawLocation[]; nextPageToken?: string }>(
+      u.toString(),
+      token,
+    );
+    for (const l of data?.locations ?? []) {
+      out.push({
+        name: l.name,
+        title: l.title ?? l.name,
+        address: formatAddress(l.storefrontAddress),
+        accountName,
+      });
+    }
+    pageToken = data?.nextPageToken;
+  } while (pageToken && out.length < 500);
+  return out;
+}
+
+export const GBP_METRICS = {
+  impressions: [
+    'BUSINESS_IMPRESSIONS_DESKTOP_MAPS',
+    'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH',
+    'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
+    'BUSINESS_IMPRESSIONS_MOBILE_SEARCH',
+  ],
+  calls: ['CALL_CLICKS'],
+  directions: ['BUSINESS_DIRECTION_REQUESTS'],
+  websiteClicks: ['WEBSITE_CLICKS'],
+  conversations: ['BUSINESS_CONVERSATIONS'],
+} as const;
+type MetricKey = keyof typeof GBP_METRICS;
+type Totals = Record<MetricKey, number>;
+
+type RawPerformance = {
+  multiDailyMetricTimeSeries?: {
+    dailyMetricTimeSeries?: {
+      dailyMetric?: string;
+      timeSeries?: {
+        datedValues?: { date?: { year: number; month: number; day: number }; value?: string }[];
+      };
+    }[];
+  }[];
+};
+
+export type GbpSummary = {
+  location: {
+    name: string;
+    title: string;
+    address: string;
+    phone: string | null;
+    website: string | null;
+    primaryCategory: string | null;
+    additionalCategories: string[];
+    openStatus: string | null;
+    mapsUri: string | null;
+    hoursSet: boolean;
+  };
+  period: { current: DateRange; previous: DateRange };
+  totals: { current: Totals; previous: Totals };
+  changePct: Record<MetricKey, number | null>;
+  daily: {
+    date: string;
+    impressions: number;
+    calls: number;
+    directions: number;
+    websiteClicks: number;
+  }[];
+  reviews: { averageRating: number | null; totalReviewCount: number | null };
+};
+
+const emptyTotals = (): Totals => ({
+  impressions: 0,
+  calls: 0,
+  directions: 0,
+  websiteClicks: 0,
+  conversations: 0,
+});
+
+/** Pure (unit-tested): performance time series + location info -> compact summary. */
+export function summarizeGbp(input: {
+  location: RawLocation;
+  performance: RawPerformance;
+  period: { current: DateRange; previous: DateRange };
+  reviews: { averageRating?: number; totalReviewCount?: number };
+}): GbpSummary {
+  const metricToKey = new Map<string, MetricKey>();
+  for (const [k, list] of Object.entries(GBP_METRICS))
+    for (const m of list) metricToKey.set(m, k as MetricKey);
+
+  const current = emptyTotals();
+  const previous = emptyTotals();
+  const byDay = new Map<string, GbpSummary['daily'][number]>();
+  for (const multi of input.performance.multiDailyMetricTimeSeries ?? []) {
+    for (const series of multi.dailyMetricTimeSeries ?? []) {
+      const key = metricToKey.get(series.dailyMetric ?? '');
+      if (!key) continue;
+      for (const dv of series.timeSeries?.datedValues ?? []) {
+        if (!dv.date) continue;
+        const d = `${dv.date.year}-${String(dv.date.month).padStart(2, '0')}-${String(dv.date.day).padStart(2, '0')}`;
+        const v = Number(dv.value ?? 0) || 0; // Google omits value when it is 0
+        if (d >= input.period.current.start && d <= input.period.current.end) {
+          current[key] += v;
+          if (key !== 'conversations') {
+            const row = byDay.get(d) ?? {
+              date: d,
+              impressions: 0,
+              calls: 0,
+              directions: 0,
+              websiteClicks: 0,
+            };
+            row[key] += v;
+            byDay.set(d, row);
+          }
+        } else if (d >= input.period.previous.start && d <= input.period.previous.end) {
+          previous[key] += v;
+        }
+      }
+    }
+  }
+  const changePct = Object.fromEntries(
+    (Object.keys(current) as MetricKey[]).map((k) => {
+      const p = pctChange(current[k], previous[k]);
+      return [k, p === null ? null : round(p)];
+    }),
+  ) as Record<MetricKey, number | null>;
+
+  const l = input.location;
+  return {
+    location: {
+      name: l.name,
+      title: l.title ?? l.name,
+      address: formatAddress(l.storefrontAddress),
+      phone: l.phoneNumbers?.primaryPhone ?? null,
+      website: l.websiteUri ?? null,
+      primaryCategory: l.categories?.primaryCategory?.displayName ?? null,
+      additionalCategories: (l.categories?.additionalCategories ?? [])
+        .map((c) => c.displayName ?? '')
+        .filter(Boolean),
+      openStatus: l.openInfo?.status ?? null,
+      mapsUri: l.metadata?.mapsUri ?? null,
+      hoursSet: (l.regularHours?.periods?.length ?? 0) > 0,
+    },
+    period: input.period,
+    totals: { current, previous },
+    changePct,
+    daily: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    reviews: {
+      averageRating: input.reviews.averageRating ?? null,
+      totalReviewCount: input.reviews.totalReviewCount ?? null,
+    },
+  };
+}
+
+export type RawReview = {
+  name: string;
+  reviewId?: string;
+  reviewer?: { displayName?: string };
+  starRating?: 'ONE' | 'TWO' | 'THREE' | 'FOUR' | 'FIVE' | 'STAR_RATING_UNSPECIFIED';
+  comment?: string;
+  createTime?: string;
+  updateTime?: string;
+  reviewReply?: { comment?: string; updateTime?: string };
+};
+
+export const STARS: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+
+/** Google appends "(Translated by Google)" blocks to reviews; keep only the original text. */
+export function originalReviewText(comment: string | undefined): string | null {
+  if (!comment) return null;
+  const marker = comment.indexOf('(Translated by Google)');
+  const original = comment.indexOf('(Original)');
+  if (original !== -1) return comment.slice(original + '(Original)'.length).trim() || null;
+  if (marker !== -1) return comment.slice(0, marker).trim() || null;
+  return comment.trim() || null;
+}
+
+export async function listReviews(token: string, accountName: string, locationName: string) {
+  const reviewsOut: RawReview[] = [];
+  let averageRating: number | undefined;
+  let totalReviewCount: number | undefined;
+  let pageToken: string | undefined;
+  do {
+    const u = new URL(
+      `https://mybusiness.googleapis.com/v4/${accountName}/${locationName}/reviews`,
+    );
+    u.searchParams.set('pageSize', '50');
+    u.searchParams.set('orderBy', 'updateTime desc');
+    if (pageToken) u.searchParams.set('pageToken', pageToken);
+    const data = await gbp<{
+      reviews?: RawReview[];
+      averageRating?: number;
+      totalReviewCount?: number;
+      nextPageToken?: string;
+    }>(u.toString(), token);
+    reviewsOut.push(...(data?.reviews ?? []));
+    averageRating ??= data?.averageRating;
+    totalReviewCount ??= data?.totalReviewCount;
+    pageToken = data?.nextPageToken;
+  } while (pageToken && reviewsOut.length < 200); // newest 200 per sync
+  return { reviews: reviewsOut, averageRating, totalReviewCount };
+}
+
+export async function replyToReview(token: string, reviewName: string, comment: string) {
+  await gbp(`https://mybusiness.googleapis.com/v4/${reviewName}/reply`, token, {
+    method: 'PUT',
+    json: { comment },
+  });
+}
+
+export async function fetchGbpSummary(
+  token: string,
+  accountName: string,
+  locationName: string,
+  now = Date.now(),
+): Promise<{ summary: GbpSummary; reviews: RawReview[] }> {
+  // Performance data is a few days behind, like Search Console.
+  const period = comparePeriods(now, 3);
+  const perfUrl = new URL(
+    `https://businessprofileperformance.googleapis.com/v1/${locationName}:fetchMultiDailyMetricsTimeSeries`,
+  );
+  for (const list of Object.values(GBP_METRICS))
+    for (const m of list) perfUrl.searchParams.append('dailyMetrics', m);
+  const [sy, sm, sd] = period.previous.start.split('-').map(Number) as [number, number, number];
+  const [ey, em, ed] = period.current.end.split('-').map(Number) as [number, number, number];
+  perfUrl.searchParams.set('dailyRange.startDate.year', String(sy));
+  perfUrl.searchParams.set('dailyRange.startDate.month', String(sm));
+  perfUrl.searchParams.set('dailyRange.startDate.day', String(sd));
+  perfUrl.searchParams.set('dailyRange.endDate.year', String(ey));
+  perfUrl.searchParams.set('dailyRange.endDate.month', String(em));
+  perfUrl.searchParams.set('dailyRange.endDate.day', String(ed));
+
+  const infoUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}?readMask=${READ_MASK}`;
+  const [location, performance, rev] = await Promise.all([
+    gbp<RawLocation>(infoUrl, token),
+    gbp<RawPerformance>(perfUrl.toString(), token),
+    listReviews(token, accountName, locationName),
+  ]);
+  return {
+    summary: summarizeGbp({
+      location: location ?? { name: locationName },
+      performance: performance ?? {},
+      period,
+      reviews: rev,
+    }),
+    reviews: rev.reviews,
+  };
+}

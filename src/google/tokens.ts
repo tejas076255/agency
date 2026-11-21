@@ -13,12 +13,57 @@ export const SCOPE = {
   driveFile: 'https://www.googleapis.com/auth/drive.file',
   slides: 'https://www.googleapis.com/auth/presentations',
   gmailSend: 'https://www.googleapis.com/auth/gmail.send',
+  // Phase 2 / 3
+  business: 'https://www.googleapis.com/auth/business.manage',
+  ads: 'https://www.googleapis.com/auth/adwords',
+  youtube: 'https://www.googleapis.com/auth/youtube.readonly',
+  ytAnalytics: 'https://www.googleapis.com/auth/yt-analytics.readonly',
 } as const;
 
 /** Client's Google account: read Search Console + GA4. */
 export const CLIENT_DATA_SCOPES = ['openid', 'email', SCOPE.gsc, SCOPE.ga4];
 /** Agency's own Google account: create the report in Slides/Drive and email it from Gmail. */
 export const WORKSPACE_SCOPES = ['openid', 'email', SCOPE.driveFile, SCOPE.slides, SCOPE.gmailSend];
+
+/**
+ * Optional per-client products, each with its OWN Google connection, so a client can connect
+ * e.g. only YouTube, and each product asks only for its own minimum scopes.
+ */
+export const CLIENT_PRODUCTS = {
+  data: {
+    purpose: 'client_data',
+    scopes: CLIENT_DATA_SCOPES,
+    required: [SCOPE.gsc, SCOPE.ga4],
+    anyOf: true,
+  },
+  gbp: {
+    purpose: 'client_business',
+    scopes: ['openid', 'email', SCOPE.business],
+    required: [SCOPE.business],
+    anyOf: false,
+  },
+  ads: {
+    purpose: 'client_ads',
+    scopes: ['openid', 'email', SCOPE.ads],
+    required: [SCOPE.ads],
+    anyOf: false,
+  },
+  youtube: {
+    purpose: 'client_youtube',
+    scopes: ['openid', 'email', SCOPE.youtube, SCOPE.ytAnalytics],
+    required: [SCOPE.youtube, SCOPE.ytAnalytics],
+    anyOf: false,
+  },
+} as const;
+export type ClientProduct = keyof typeof CLIENT_PRODUCTS;
+
+/** True if the granted scopes satisfy a product (all required, or any for 'data'). */
+export function grantedEnough(product: ClientProduct, granted: string[]): boolean {
+  const p = CLIENT_PRODUCTS[product];
+  return p.anyOf
+    ? p.required.some((s) => granted.includes(s))
+    : p.required.every((s) => granted.includes(s));
+}
 
 export type Connection = typeof googleConnections.$inferSelect;
 export type ConnectionPurpose = Connection['purpose'];
@@ -156,7 +201,9 @@ export async function markRevoked(env: Env, conn: Connection) {
     .update(googleConnections)
     .set({ status: 'revoked' })
     .where(and(eq(googleConnections.id, conn.id), eq(googleConnections.agencyId, conn.agencyId)));
-  if (conn.clientId) {
+  // Only the main Search Console/GA4 connection drives the client's "Reconnect needed" status;
+  // other products show their own revoked state on their tab.
+  if (conn.clientId && conn.purpose === 'client_data') {
     await db
       .update(clients)
       .set({ status: 'reconnect_needed', updatedAt: Date.now() })

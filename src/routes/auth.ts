@@ -2,7 +2,14 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { and, eq, sql } from 'drizzle-orm';
 import { clients, users } from '../db/schema';
-import { saveConnection, SCOPE } from '../google/tokens';
+import {
+  CLIENT_PRODUCTS,
+  grantedEnough,
+  saveConnection,
+  SCOPE,
+  type ClientProduct,
+} from '../google/tokens';
+import { acceptInvitation } from '../lib/team';
 import { audit, auditRequest } from '../lib/audit';
 import { getDb } from '../lib/db';
 import { log } from '../lib/log';
@@ -51,7 +58,15 @@ authRoutes.post('/google/login', authLimit, async (c) => {
   );
   if (!ok) return loginError(c, 'turnstile');
 
-  const { url, state } = await startGoogleOAuth(c.env, { purpose: 'login' }, LOGIN_SCOPES);
+  const invite =
+    typeof form['invite'] === 'string' && /^[A-Za-z0-9_-]{43}$/.test(form['invite'])
+      ? form['invite']
+      : undefined;
+  const { url, state } = await startGoogleOAuth(
+    c.env,
+    { purpose: 'login', ...(invite ? { inviteToken: invite } : {}) },
+    LOGIN_SCOPES,
+  );
   setCookie(c, OAUTH_STATE_COOKIE, state, {
     httpOnly: true,
     secure: true,
@@ -90,8 +105,11 @@ authRoutes.get('/google/callback', authLimit, async (c) => {
 
 /** "Connect Google" for a client (Search Console + GA4) or for the agency (Slides/Drive/Gmail). */
 async function completeConnect(c: Context<AppEnv>, code: string, saved: OAuthState) {
-  const back = saved.purpose === 'connect_client' ? `/clients/${saved.clientId}` : '/settings';
-  const fail = (reason: string) => c.redirect(`${back}?connect_error=${reason}`, 302);
+  const back =
+    saved.purpose === 'connect_client'
+      ? `/clients/${saved.clientId}${saved.product && saved.product !== 'data' ? `?tab=${saved.product}&` : '?'}`
+      : '/settings?';
+  const fail = (reason: string) => c.redirect(`${back}connect_error=${reason}`, 302);
 
   // The same signed-in user (and agency) that started the flow must finish it.
   const user = c.get('user');
@@ -110,32 +128,34 @@ async function completeConnect(c: Context<AppEnv>, code: string, saved: OAuthSta
     const db = getDb(c.env);
 
     if (saved.purpose === 'connect_client') {
+      const product: ClientProduct = saved.product ?? 'data';
       const client = await db.query.clients.findFirst({
         where: and(eq(clients.id, saved.clientId ?? ''), eq(clients.agencyId, saved.agencyId)),
       });
       if (!client) return c.redirect('/dashboard', 302);
-      // Google lets users untick scopes; we need at least one data source.
-      if (!granted.includes(SCOPE.gsc) && !granted.includes(SCOPE.ga4))
-        return fail('missing_scopes');
+      // Google lets users untick scopes: check the product's minimum scopes were granted.
+      if (!grantedEnough(product, granted)) return fail('missing_scopes');
       await saveConnection(c.env, {
         agencyId: saved.agencyId,
         clientId: client.id,
-        purpose: 'client_data',
+        purpose: CLIENT_PRODUCTS[product].purpose,
         googleEmail: claims?.email ?? 'unknown',
         scopes: tokens.scope,
         refreshToken: tokens.refresh_token,
         userId: user.id,
       });
-      await db
-        .update(clients)
-        .set({ status: 'active', updatedAt: Date.now() })
-        .where(and(eq(clients.id, client.id), eq(clients.agencyId, saved.agencyId)));
+      if (product === 'data') {
+        await db
+          .update(clients)
+          .set({ status: 'active', updatedAt: Date.now() })
+          .where(and(eq(clients.id, client.id), eq(clients.agencyId, saved.agencyId)));
+      }
       await auditRequest(c, 'google.client_connect', {
         targetType: 'client',
         targetId: client.id,
-        metadata: { googleEmail: claims?.email, scopes: tokens.scope },
+        metadata: { product, googleEmail: claims?.email, scopes: tokens.scope },
       });
-      return c.redirect(`/clients/${client.id}?connected=1`, 302);
+      return c.redirect(`/clients/${client.id}?connected=${product}`, 302);
     }
 
     // connect_agency
@@ -203,6 +223,14 @@ async function completeLogin(c: Context<AppEnv>, code: string, saved: OAuthState
   }
   if (!user) throw new Error('Failed to save user');
 
+  // Team invite from the login link: join the agency as a member.
+  let inviteError: string | null = null;
+  if (saved.inviteToken) {
+    const res = await acceptInvitation(c.env, user, saved.inviteToken);
+    if (res.ok) user = res.user;
+    else inviteError = res.reason;
+  }
+
   // Always issue a fresh session on login (prevents session fixation).
   const oldSid = c.get('sessionId');
   if (oldSid) await destroySession(c.env.KV, oldSid);
@@ -215,6 +243,7 @@ async function completeLogin(c: Context<AppEnv>, code: string, saved: OAuthState
     ip: c.req.header('cf-connecting-ip') ?? null,
   });
 
+  if (inviteError) return c.redirect(`/onboarding?invite_error=${inviteError}`, 302);
   return c.redirect(user.agencyId ? '/dashboard' : '/onboarding', 302);
 }
 

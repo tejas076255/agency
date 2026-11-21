@@ -2,6 +2,22 @@
 import type { Ga4Summary } from '../google/ga4';
 import type { GscSummary } from '../google/gsc';
 import type { PageSpeedSummary } from '../google/pagespeed';
+import type { AdsSummary } from '../google/ads';
+import type { GbpSummary } from '../google/business';
+import type { YouTubeSummary } from '../google/youtube';
+
+/** Phase 2/3 extras for the AI summary (each null when not connected). */
+export type CompactExtras = {
+  gbp?: GbpSummary | null;
+  reviews?: {
+    recent30: number;
+    negative30: number;
+    unanswered: number;
+    averageRating: number | null;
+  } | null;
+  ads?: AdsSummary | null;
+  youtube?: YouTubeSummary | null;
+};
 
 export type InsightAction = {
   priority: number;
@@ -27,8 +43,10 @@ export function buildCompactSummary(
   ga4: Ga4Summary | null,
   psi: PageSpeedSummary | null,
   score: number | null,
+  extras: CompactExtras = {},
 ) {
   const mobile = psi?.mobile ?? null;
+  const { gbp = null, reviews = null, ads = null, youtube = null } = extras;
   return {
     client: client.name,
     website: client.websiteUrl,
@@ -76,6 +94,51 @@ export function buildCompactSummary(
         top_fixes: mobile.opportunities.map((o) => o.title),
       },
       desktop: psi.desktop && { lighthouse_score: psi.desktop.score },
+    },
+    local_business: gbp && {
+      listing: gbp.location.title,
+      primary_category: gbp.location.primaryCategory,
+      has_website: Boolean(gbp.location.website),
+      has_phone: Boolean(gbp.location.phone),
+      hours_set: gbp.location.hoursSet,
+      impressions: gbp.totals.current.impressions,
+      impressions_change_pct: gbp.changePct.impressions,
+      calls: gbp.totals.current.calls,
+      calls_change_pct: gbp.changePct.calls,
+      direction_requests: gbp.totals.current.directions,
+      website_clicks: gbp.totals.current.websiteClicks,
+      average_rating: gbp.reviews.averageRating,
+      total_reviews: gbp.reviews.totalReviewCount,
+    },
+    reviews_last_30_days: reviews && {
+      new_reviews: reviews.recent30,
+      negative: reviews.negative30,
+      unanswered: reviews.unanswered,
+    },
+    google_ads: ads && {
+      currency: ads.currency,
+      cost: ads.totals.current.cost,
+      cost_change_pct: ads.changePct.cost,
+      clicks: ads.totals.current.clicks,
+      conversions: ads.totals.current.conversions,
+      cost_per_conversion: ads.derived.costPerConversion,
+      roas: ads.derived.roas,
+      wasted_spend_on_non_converting_terms: ads.wastedSpend,
+      top_wasted_terms: ads.wastedSearchTerms
+        .slice(0, 5)
+        .map((w) => ({ term: w.term, cost: w.cost })),
+      top_campaigns: ads.campaigns
+        .slice(0, 3)
+        .map((c) => ({ name: c.name, cost: c.cost, conversions: c.conversions })),
+    },
+    youtube: youtube && {
+      channel: youtube.channel.title,
+      views: youtube.totals.current.views,
+      views_change_pct: youtube.changePct.views,
+      watch_minutes: youtube.totals.current.watchMinutes,
+      net_subscribers:
+        youtube.totals.current.subscribersGained - youtube.totals.current.subscribersLost,
+      top_videos: youtube.topVideos.slice(0, 3).map((v) => ({ title: v.title, views: v.views })),
     },
   };
 }
@@ -200,6 +263,68 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
       why: 'Without GA4 data, traffic, engagement and leads cannot be measured.',
       expected_impact: 'Unlocks traffic and conversion insights in the next health check.',
       supporting_metrics: ['GA4 data: not connected'],
+    });
+  }
+
+  const ads = s.google_ads;
+  if (ads && ads.wasted_spend_on_non_converting_terms > 0 && ads.top_wasted_terms.length > 0) {
+    out.push({
+      title: 'Add negative keywords for search terms that spend without converting',
+      description: `Review and exclude irrelevant terms such as ${ads.top_wasted_terms
+        .slice(0, 3)
+        .map((t) => `"${t.term}"`)
+        .join(', ')}.`,
+      why: 'These search terms used budget in the last 28 days with zero conversions.',
+      expected_impact: 'Could free up budget for search terms that bring leads.',
+      supporting_metrics: [
+        `Spend on non-converting terms: ${ads.currency} ${fmt(ads.wasted_spend_on_non_converting_terms)}`,
+        ...ads.top_wasted_terms
+          .slice(0, 2)
+          .map((t) => `"${t.term}": ${ads.currency} ${fmt(t.cost)}`),
+      ],
+    });
+  }
+
+  const rev = s.reviews_last_30_days;
+  if (rev && (rev.negative > 0 || rev.unanswered > 0)) {
+    out.push({
+      title: 'Reply to recent Google reviews, starting with negative ones',
+      description: 'Write polite, specific replies and offer to resolve issues offline.',
+      why: 'Unanswered and negative reviews are visible to everyone who finds the business on Google.',
+      expected_impact: 'May improve trust and how searchers see the listing.',
+      supporting_metrics: [
+        `Negative reviews (30 days): ${rev.negative}`,
+        `Unanswered reviews: ${rev.unanswered}`,
+      ],
+    });
+  }
+
+  const lb = s.local_business;
+  if (lb && (!lb.hours_set || !lb.has_website || !lb.has_phone)) {
+    const missing = [
+      !lb.hours_set && 'opening hours',
+      !lb.has_website && 'website link',
+      !lb.has_phone && 'phone number',
+    ].filter(Boolean);
+    out.push({
+      title: 'Complete the Google Business Profile',
+      description: `Add the missing ${missing.join(', ')} to the listing.`,
+      why: 'Complete listings give searchers what they need to call or visit.',
+      expected_impact: 'Could increase calls and direction requests from Google Maps.',
+      supporting_metrics: [`Listing: ${lb.listing}`, `Missing: ${missing.join(', ')}`],
+    });
+  }
+
+  const yt = s.youtube;
+  if (yt && yt.views_change_pct !== null && yt.views_change_pct <= -15) {
+    out.push({
+      title: 'Plan new videos around the best-performing topic',
+      description: yt.top_videos[0]
+        ? `Create follow-up videos related to "${yt.top_videos[0].title}".`
+        : 'Publish a new video on a proven topic.',
+      why: 'Channel views dropped compared with the previous 28 days.',
+      expected_impact: 'May bring views back by building on what already works.',
+      supporting_metrics: [`Views: ${fmt(yt.views)} (${pct(yt.views_change_pct)})`],
     });
   }
 

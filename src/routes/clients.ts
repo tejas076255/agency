@@ -16,6 +16,7 @@ import {
 } from '../google/tokens';
 import { enqueueJobs, hasPendingJob } from '../jobs/queue';
 import { auditRequest } from '../lib/audit';
+import { assertCanAddClient, assertManualRunAllowed } from '../lib/plans';
 import { getDb } from '../lib/db';
 import { OAUTH_STATE_COOKIE, startGoogleOAuth } from '../lib/google-oauth';
 import { readJson } from '../lib/validate';
@@ -100,6 +101,7 @@ clientRoutes.get('/', async (c) => {
 
 clientRoutes.post('/', async (c) => {
   const input = await readJson(c, clientInput);
+  await assertCanAddClient(c.env, c.get('agencyId'));
   const now = Date.now();
   const [row] = await getDb(c.env)
     .insert(clients)
@@ -417,6 +419,7 @@ clientRoutes.post('/:id/run', async (c) => {
   if (await hasPendingJob(c.env, agencyId, client.id, input.type)) {
     return c.json({ error: 'This job is already queued or running for this client' }, 409);
   }
+  await assertManualRunAllowed(c.env, agencyId);
   const [jobRunId] = await enqueueJobs(c.env, [
     {
       agencyId,

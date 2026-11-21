@@ -43,6 +43,8 @@ type RequestOptions = {
   responseType?: 'json' | 'bytes';
   timeoutMs?: number;
   retries?: number;
+  /** Extra headers (e.g. Places field mask, Ads developer-token). */
+  headers?: Record<string, string>;
 };
 
 export async function googleRequest<T = unknown>(
@@ -55,7 +57,7 @@ export async function googleRequest<T = unknown>(
   for (;;) {
     let res: Response;
     try {
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = { ...opts.headers };
       if (opts.accessToken) headers.Authorization = `Bearer ${opts.accessToken}`;
       let body = opts.body;
       if (opts.json !== undefined) {

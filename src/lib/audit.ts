@@ -24,7 +24,17 @@ export type AuditAction =
   | 'google.workspace_disconnect'
   | 'job.run_requested'
   | 'report.pdf_refresh'
-  | 'report.send';
+  | 'report.send'
+  | 'client.assign'
+  | 'client.integration_selection'
+  | 'google.product_disconnect'
+  | 'review.reply'
+  | 'competitor.add'
+  | 'competitor.remove'
+  | 'export.sheets'
+  | 'team.invite'
+  | 'team.invite_revoke'
+  | 'team.member_remove';
 
 export type AuditEntry = {
   agencyId: string | null;

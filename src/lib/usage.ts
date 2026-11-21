@@ -27,10 +27,20 @@ export function apiNameFromUrl(url: string): string {
   if (h === 'slides.googleapis.com') return 'slides';
   if (h === 'gmail.googleapis.com') return 'gmail';
   if (h === 'oauth2.googleapis.com') return 'oauth';
+  if (h === 'mybusinessaccountmanagement.googleapis.com') return 'gbp_accounts';
+  if (h === 'mybusinessbusinessinformation.googleapis.com') return 'gbp_info';
+  if (h === 'businessprofileperformance.googleapis.com') return 'gbp_performance';
+  if (h === 'mybusiness.googleapis.com') return 'gbp_reviews';
+  if (h === 'places.googleapis.com') return 'places';
+  if (h === 'language.googleapis.com') return 'natural_language';
+  if (h === 'sheets.googleapis.com') return 'sheets';
+  if (h === 'googleads.googleapis.com') return 'google_ads';
+  if (h === 'youtubeanalytics.googleapis.com') return 'youtube_analytics';
   if (h === 'www.googleapis.com') {
     if (u.pathname.startsWith('/webmasters')) return 'gsc';
     if (u.pathname.startsWith('/pagespeedonline')) return 'pagespeed';
     if (u.pathname.startsWith('/drive')) return 'drive';
+    if (u.pathname.startsWith('/youtube')) return 'youtube_data';
   }
   return 'other';
 }
