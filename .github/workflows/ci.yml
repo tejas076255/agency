@@ -1,0 +1,24 @@
+# Runs on every push and pull request: lint, typecheck, tests (Google APIs are mocked), build.
+# Deployment itself is done by Cloudflare Workers Builds (connected to this repo in the Cloudflare dashboard).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build:web

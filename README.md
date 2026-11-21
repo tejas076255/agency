@@ -284,3 +284,19 @@ Details and approval steps: [docs/API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md)
 | Plans                                                | No payments yet                                     | Change with `npx wrangler d1 execute agency-autopilot --remote --command "UPDATE agencies SET plan='pro' WHERE id='<id>'"`      |
 
 For local dev put the same names in `.dev.vars` (see `.dev.vars.example`).
+
+## Continuous deployment from GitHub
+
+Repository: https://github.com/tejas076255/agency
+
+- **GitHub Actions** (`.github/workflows/ci.yml`) runs lint, typecheck, tests and the web build on every push and pull request.
+- **Cloudflare Workers Builds** is connected to the repo and deploys `main` automatically. Settings used
+  (Cloudflare dashboard, Workers & Pages, agency-autopilot, Settings, Build):
+  - Git repository: `tejas076255/agency`, production branch `main`
+  - Build command: `npm ci && npm run build`
+  - Deploy command: `npx wrangler deploy`
+  - Root directory: `/`
+- Secrets are **not** in the repo. They stay as Worker secrets (`npx wrangler secret put ...`) and keep working
+  across Git deployments.
+- Database migrations are not run automatically. After pushing a new file in `migrations/`, run
+  `npm run db:migrate:remote` once (before or right after the deploy).
