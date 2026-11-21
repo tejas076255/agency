@@ -3,11 +3,14 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 
 const navItems = [
-  // Only implemented (Phase 1) sections are shown; Local SEO, Ads, YouTube appear in later phases.
   { to: '/dashboard', label: 'Overview' },
   { to: '/clients', label: 'Clients' },
+  { to: '/local-seo', label: 'Local SEO' },
+  { to: '/advertising', label: 'Advertising' },
+  { to: '/youtube', label: 'YouTube' },
   { to: '/reports', label: 'Reports' },
   { to: '/jobs', label: 'Job logs' },
+  { to: '/billing', label: 'Plan' },
   { to: '/settings', label: 'Settings' },
 ];
 
@@ -43,14 +46,6 @@ export function Layout() {
             <span className="truncate font-semibold">{agency?.name ?? 'Agency Autopilot'}</span>
           </div>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            {navItems.map((n) => (
-              <NavLink key={n.to} to={n.to} className={linkClass}>
-                {n.label}
-              </NavLink>
-            ))}
-          </nav>
-
           <div className="hidden items-center gap-3 md:flex">
             {user?.pictureUrl && (
               <img
@@ -83,6 +78,18 @@ export function Layout() {
             </svg>
           </button>
         </div>
+
+        {/* Desktop navigation (second row so all sections fit). */}
+        <nav
+          aria-label="Main"
+          className="mx-auto hidden max-w-6xl gap-1 overflow-x-auto px-4 pb-2 md:flex"
+        >
+          {navItems.map((n) => (
+            <NavLink key={n.to} to={n.to} className={linkClass}>
+              {n.label}
+            </NavLink>
+          ))}
+        </nav>
 
         {menuOpen && (
           <div className="border-t border-slate-200 px-4 py-3 md:hidden">

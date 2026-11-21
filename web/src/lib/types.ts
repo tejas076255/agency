@@ -103,6 +103,7 @@ export type ClientDetail = {
     ga4PropertyId: string | null;
     status: ClientStatus;
     autoSendReport: boolean;
+    assignedUserId?: string | null;
   };
   connection: {
     googleEmail: string;
@@ -207,4 +208,240 @@ export type ReportSettings = {
   emailMessage: string;
   ccAgency: boolean;
   includeHinglish: boolean;
+};
+
+// ------------------------------ Phase 2 / 3 / 4 ------------------------------
+
+export type Snapshot<T> = {
+  runAt: number;
+  status: 'ok' | 'failed';
+  error: string | null;
+  data: T | null;
+} | null;
+
+export type ProductState<T> = {
+  connection: { googleEmail: string; status: 'active' | 'revoked'; connectedAt: number } | null;
+  selected: string | null;
+  latest: Snapshot<T>;
+};
+
+type MetricTotals = {
+  impressions: number;
+  calls: number;
+  directions: number;
+  websiteClicks: number;
+  conversations: number;
+};
+export type GbpData = {
+  location: {
+    title: string;
+    address: string;
+    phone: string | null;
+    website: string | null;
+    primaryCategory: string | null;
+    additionalCategories: string[];
+    openStatus: string | null;
+    mapsUri: string | null;
+    hoursSet: boolean;
+  };
+  totals: { current: MetricTotals; previous: MetricTotals };
+  changePct: Record<keyof MetricTotals, number | null>;
+  daily: {
+    date: string;
+    impressions: number;
+    calls: number;
+    directions: number;
+    websiteClicks: number;
+  }[];
+  reviews: { averageRating: number | null; totalReviewCount: number | null };
+};
+
+type AdsTotals = {
+  impressions: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  conversionValue: number;
+};
+export type AdsData = {
+  currency: string;
+  totals: { current: AdsTotals; previous: AdsTotals };
+  derived: {
+    ctrPct: number | null;
+    avgCpc: number | null;
+    costPerConversion: number | null;
+    roas: number | null;
+  };
+  changePct: { cost: number | null; clicks: number | null; conversions: number | null };
+  campaigns: {
+    id: string;
+    name: string;
+    status: string;
+    cost: number;
+    clicks: number;
+    impressions: number;
+    conversions: number;
+    conversionValue: number;
+    dailyBudget: number | null;
+    budgetUtilizationPct: number | null;
+  }[];
+  wastedSearchTerms: { term: string; campaign: string; cost: number; clicks: number }[];
+  wastedSpend: number;
+  daily: { date: string; cost: number; clicks: number; conversions: number }[];
+};
+
+type YtTotals = {
+  views: number;
+  watchMinutes: number;
+  avgViewDurationSec: number;
+  subscribersGained: number;
+  subscribersLost: number;
+};
+export type YouTubeData = {
+  channel: {
+    id: string;
+    title: string;
+    subscribers: number | null;
+    totalViews: number | null;
+    videos: number | null;
+  };
+  totals: { current: YtTotals; previous: YtTotals };
+  changePct: { views: number | null; watchMinutes: number | null; netSubscribers: number | null };
+  daily: { date: string; views: number; watchMinutes: number; netSubscribers: number }[];
+  topVideos: {
+    id: string;
+    title: string;
+    views: number;
+    watchMinutes: number;
+    avgViewDurationSec: number;
+  }[];
+};
+
+export type ReviewRow = {
+  id: string;
+  reviewerName: string | null;
+  starRating: number | null;
+  comment: string | null;
+  reviewCreatedAt: number | null;
+  replyComment: string | null;
+  label: 'positive' | 'neutral' | 'negative' | null;
+  sentimentScore: number | null;
+  entities: string[];
+};
+
+export type Integrations = {
+  config: {
+    places: boolean;
+    naturalLanguage: boolean;
+    adsDeveloperToken: boolean;
+    workspaceConnected: boolean;
+  };
+  gbp: ProductState<GbpData>;
+  ads: ProductState<AdsData>;
+  youtube: ProductState<YouTubeData>;
+  reviews: {
+    stats: {
+      recent30: number;
+      negative30: number;
+      unanswered: number;
+      averageRating: number | null;
+    } | null;
+    sentimentCounts: { positive: number; neutral: number; negative: number };
+    themes: {
+      positive: { name: string; count: number }[];
+      negative: { name: string; count: number }[];
+    };
+    trend: { month: string; count: number; avgRating: number }[];
+    recent: ReviewRow[];
+  };
+  competitors: { id: string; placeId: string; label: string; isClient: boolean }[];
+  exports: {
+    id: string;
+    url: string | null;
+    status: 'ok' | 'failed';
+    error: string | null;
+    createdAt: number;
+  }[];
+};
+
+export type PlaceResult = {
+  placeId: string;
+  name: string;
+  address: string | null;
+  rating: number | null;
+  userRatingCount: number | null;
+  primaryType: string | null;
+  mapsUri: string | null;
+};
+
+export type ChannelOverviewRow = {
+  id: string;
+  name: string;
+  gbpSelected: boolean;
+  adsSelected: boolean;
+  youtubeSelected: boolean;
+  gbp: {
+    runAt: number;
+    error: string | null;
+    calls: number | null;
+    callsChangePct: number | null;
+    directions: number | null;
+    impressions: number | null;
+    rating: number | null;
+    reviewCount: number | null;
+  } | null;
+  reviews: {
+    recent30: number;
+    negative30: number;
+    unanswered: number;
+    averageRating: number | null;
+  } | null;
+  ads: {
+    runAt: number;
+    error: string | null;
+    currency: string | null;
+    cost: number | null;
+    conversions: number | null;
+    roas: number | null;
+    wastedSpend: number | null;
+  } | null;
+  youtube: {
+    runAt: number;
+    error: string | null;
+    views: number | null;
+    viewsChangePct: number | null;
+    netSubscribers: number | null;
+  } | null;
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: 'owner' | 'member';
+  pictureUrl: string | null;
+  assignedClients: number;
+};
+
+export type Billing = {
+  plan: 'free' | 'pro' | 'agency';
+  limits: {
+    name: string;
+    monthlyPriceInr: number;
+    maxClients: number;
+    maxMembers: number;
+    manualRunsPerDay: number;
+  };
+  usage: { clients: number; members: number; pendingInvites: number; manualRunsToday: number };
+  plans: Record<
+    string,
+    {
+      name: string;
+      monthlyPriceInr: number;
+      maxClients: number;
+      maxMembers: number;
+      manualRunsPerDay: number;
+    }
+  >;
+  paymentsEnabled: boolean;
 };

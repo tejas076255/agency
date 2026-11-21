@@ -80,3 +80,16 @@ Share links use a 192-bit random token (`/r/:token`), are read-only, `noindex`, 
 - Sensitive scopes need Google verification (see [API_INTEGRATIONS.md](API_INTEGRATIONS.md)).
 - The OAuth client secret and PageSpeed key were shared in a chat during setup: rotate both before launch.
 - No automated dependency/vulnerability scanning yet (`npm audit` shows dev-only issues in drizzle-kit).
+
+## Phase 2 / 3 additions
+
+- **Least privilege per product**: separate Google connections and consents for Business Profile, Ads and YouTube.
+- **Team invites**: 256-bit token in the link, only its SHA-256 stored; 7-day expiry; single use; the Google account
+  email must match the invited email; a user already in another agency is never moved; removing a member bumps their
+  `session_version` (instant logout) and unassigns their clients. Only owners can invite, remove and assign.
+- **Places terms**: only place IDs are stored; ratings and review counts are fetched live and shown with attribution.
+- **AI-derived data separated**: review sentiment lives in `review_sentiments` and never overwrites original review
+  text; exports label AI-derived columns.
+- **Review replies** are posted only on an explicit user action and are audited (`review.reply`).
+- **Tenant isolation** for all new routes is covered by `test/phase2-3-api.test.ts`.
+- `PLACES_API_KEY`, `NATURAL_LANGUAGE_API_KEY` and the Ads developer token are Worker secrets, never sent to the browser.

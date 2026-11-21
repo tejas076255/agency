@@ -10,8 +10,8 @@ accounts once; the app runs weekly health checks (SEO, traffic, site speed), use
 Workers AI (+ AI Gateway) · Turnstile · React + Vite + Tailwind (Workers Static Assets) ·
 Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gmail APIs.
 
-> Status: **Phase 1 code complete** (see [PROJECT_STATUS.md](PROJECT_STATUS.md) for what is verified and what
-> still needs the owner's test with real Google accounts). Phases 2-4 not started.
+> Status: **Phases 1-3 code complete, Phase 4 plans/limits done (no payments)** (see [PROJECT_STATUS.md](PROJECT_STATUS.md) for what is verified and what
+> still needs the owner's test with real Google accounts). Phase 2/3 integrations need Google approvals/billing before they return real data.
 
 **Docs:** [Project status](PROJECT_STATUS.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [API integrations & readiness](docs/API_INTEGRATIONS.md) · [Security](docs/SECURITY.md) ·
@@ -230,7 +230,7 @@ the app for **verification** (privacy policy, homepage, demo video) for the four
 ## Testing
 
 ```bash
-npm test          # Vitest: 112 tests
+npm test          # Vitest: 142 tests
 npm run typecheck # strict TypeScript (Worker + web)
 npm run lint
 ```
@@ -266,3 +266,21 @@ failures, backoff, token caching, revoked tokens) and cron fan-out. No test hits
   team member invites, white-label report domain.
 - **Phase 3:** YouTube Data/Analytics, Google Ads (needs developer token approval),
   optional Google Trends, billing/plans in INR (likely Razorpay).
+
+## Phase 2 / 3 / 4 setup (optional integrations)
+
+All of these are optional: until configured, each section shows "not configured" or "not approved" instead of fake data.
+Details and approval steps: [docs/API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md).
+
+| Feature                                              | What you need                                       | How to configure                                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Google Business Profile (calls, directions, reviews) | Google approval of Business Profile API access      | Enable the 4 Business Profile APIs, add scope `business.manage` to the consent screen; then on a client, Local SEO tab, Connect |
+| Competitors (Places API New)                         | Billing on the Cloud project                        | Restricted API key, then `npx wrangler secret put PLACES_API_KEY`                                                               |
+| Review sentiment (Natural Language)                  | Billing on the Cloud project                        | Restricted API key, then `npx wrangler secret put NATURAL_LANGUAGE_API_KEY`                                                     |
+| Google Ads                                           | Developer token with Basic Access (manager account) | `npx wrangler secret put GOOGLE_ADS_DEVELOPER_TOKEN` (optional `GOOGLE_ADS_LOGIN_CUSTOMER_ID`); add scope `adwords`             |
+| YouTube                                              | Channel owner signs in                              | Enable YouTube Data API v3 + YouTube Analytics API; add `youtube.readonly` and `yt-analytics.readonly` scopes                   |
+| Sheets export                                        | Agency Google account connected (Settings)          | Nothing extra (uses `drive.file`)                                                                                               |
+| Team members                                         | Pro/Agency plan (Free = owner only)                 | Settings, Team, Invite                                                                                                          |
+| Plans                                                | No payments yet                                     | Change with `npx wrangler d1 execute agency-autopilot --remote --command "UPDATE agencies SET plan='pro' WHERE id='<id>'"`      |
+
+For local dev put the same names in `.dev.vars` (see `.dev.vars.example`).

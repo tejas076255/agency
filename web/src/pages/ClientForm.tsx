@@ -7,7 +7,62 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { Skeleton } from '../components/Skeleton';
 import { Alert, Button, Card, Field, inputClass } from '../components/ui';
 import { api } from '../lib/api';
-import type { ClientDetail } from '../lib/types';
+import { useAuth } from '../lib/auth';
+import type { ClientDetail, TeamMember } from '../lib/types';
+
+/** Owner-only: choose which team member works on this client. */
+function AssigneeCard({ clientId, current }: { clientId: string; current: string | null }) {
+  const [members, setMembers] = useState<TeamMember[] | null>(null);
+  const [value, setValue] = useState(current ?? '');
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ members: TeamMember[] }>('/api/team')
+      .then((r) => setMembers(r.members))
+      .catch(() => setMembers([]));
+  }, []);
+  async function save(v: string) {
+    setValue(v);
+    setMsg(null);
+    try {
+      await api(`/api/clients/${clientId}/assignee`, {
+        method: 'PUT',
+        body: { userId: v || null },
+      });
+      setMsg('Saved.');
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  const team = members?.filter((m) => m.role === 'member') ?? [];
+  return (
+    <Card>
+      <h2 className="font-semibold">Assigned team member</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Members only see clients assigned to them. Owners see all clients.
+      </p>
+      {members && team.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-400">
+          No team members yet. Invite them in Settings → Team.
+        </p>
+      ) : (
+        <select
+          className={`${inputClass} mt-3 max-w-sm`}
+          value={value}
+          onChange={(e) => void save(e.target.value)}
+          aria-label="Assigned team member"
+        >
+          <option value="">— Nobody (owner only) —</option>
+          {team.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name} ({m.email})
+            </option>
+          ))}
+        </select>
+      )}
+      {msg && <p className="mt-2 text-xs text-slate-500">{msg}</p>}
+    </Card>
+  );
+}
 
 // Same rules as the server (src/routes/clients.ts); the server validates again.
 const schema = z.object({
@@ -31,6 +86,8 @@ export function ClientFormPage() {
   const [loading, setLoading] = useState(editing);
   const [serverError, setServerError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [assignee, setAssignee] = useState<string | null | undefined>(undefined);
+  const { me } = useAuth();
 
   const {
     register,
@@ -46,14 +103,15 @@ export function ClientFormPage() {
   useEffect(() => {
     if (!id) return;
     api<ClientDetail>(`/api/clients/${id}`)
-      .then((d) =>
+      .then((d) => {
         reset({
           name: d.client.name,
           websiteUrl: d.client.websiteUrl,
           contactEmail: d.client.contactEmail,
           autoSendReport: d.client.autoSendReport,
-        }),
-      )
+        });
+        setAssignee(d.client.assignedUserId ?? null);
+      })
       .catch((e: Error) => setServerError(e.message))
       .finally(() => setLoading(false));
   }, [id, reset]);
@@ -164,6 +222,9 @@ export function ClientFormPage() {
           </div>
         </form>
       </Card>
+      {editing && id && me?.user?.role === 'owner' && assignee !== undefined && (
+        <AssigneeCard clientId={id} current={assignee} />
+      )}
       {editing && (
         <Card>
           <h2 className="font-semibold text-red-700">Delete client</h2>

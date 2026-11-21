@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { DetailSkeleton } from './components/Skeleton';
 import { Alert, FullPageSpinner } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
+import { AdvertisingPage, BillingPage, LocalSeoPage, YouTubePage } from './pages/Channels';
 import { ClientFormPage } from './pages/ClientForm';
 import { ClientsPage } from './pages/Clients';
 import { DashboardPage } from './pages/Dashboard';
@@ -99,6 +100,10 @@ export function App() {
                   }
                 />
                 <Route path="/clients/:id/edit" element={<ClientFormPage />} />
+                <Route path="/local-seo" element={<LocalSeoPage />} />
+                <Route path="/advertising" element={<AdvertisingPage />} />
+                <Route path="/youtube" element={<YouTubePage />} />
+                <Route path="/billing" element={<BillingPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

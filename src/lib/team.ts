@@ -56,6 +56,11 @@ export async function acceptInvitation(
   if (invite.email !== user.email.toLowerCase()) return { ok: false, reason: 'email_mismatch' };
   if (user.agencyId && user.agencyId !== invite.agencyId)
     return { ok: false, reason: 'already_in_agency' };
+  // Already in this agency (e.g. the owner opened the link): just close the invite, keep the role.
+  if (user.agencyId === invite.agencyId) {
+    await db.update(invitations).set({ acceptedAt: now }).where(eq(invitations.id, invite.id));
+    return { ok: true, user };
+  }
 
   await db.batch([
     db

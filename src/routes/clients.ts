@@ -204,6 +204,7 @@ clientRoutes.get('/:id', async (c) => {
       ga4PropertyId: client.ga4PropertyId,
       status: client.status,
       autoSendReport: client.autoSendReport,
+      assignedUserId: client.assignedUserId,
     },
     connection: conn
       ? {

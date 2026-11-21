@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LogoUploader } from '../components/LogoUploader';
 import { Alert, Button, Card, Field, inputClass } from '../components/ui';
 import { api, type Agency } from '../lib/api';
@@ -14,9 +14,18 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
+const INVITE_ERRORS: Record<string, string> = {
+  invalid: 'This invitation link is invalid or was already used.',
+  expired: 'This invitation has expired. Ask the agency owner for a new one.',
+  email_mismatch: 'You signed in with a different Google account than the one invited.',
+  already_in_agency: 'You already belong to another agency.',
+};
+
 export function OnboardingPage() {
   const { me, refresh } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const inviteError = params.get('invite_error');
   const [agency, setAgency] = useState<Agency | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const { register, handleSubmit, watch, formState } = useForm<Values>({
@@ -46,6 +55,14 @@ export function OnboardingPage() {
       style={{ ['--brand' as string]: /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#4f46e5' }}
     >
       <Card className="w-full max-w-md">
+        {inviteError && (
+          <div className="mb-4">
+            <Alert>
+              {INVITE_ERRORS[inviteError] ?? 'The invitation could not be used.'} You can still
+              create your own agency below.
+            </Alert>
+          </div>
+        )}
         <p className="text-sm text-slate-500">Welcome, {me?.user?.name}</p>
         <h1 className="mt-1 text-xl font-bold">
           {agency ? 'Add your logo (optional)' : 'Set up your agency'}

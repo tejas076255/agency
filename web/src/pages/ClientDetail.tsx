@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ChangePill, ClientStatusBadge, ScoreBadge, StatusBadge } from '../components/badges';
 import { TrendChart } from '../components/charts';
+import { AdsTab, ExportsTab, LocalSeoTab, useIntegrations, YouTubeTab } from './ClientChannels';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DetailSkeleton, Skeleton } from '../components/Skeleton';
 import { Alert, Button, Card, inputClass } from '../components/ui';
@@ -33,6 +34,7 @@ const SOURCE_LABEL: Record<string, string> = {
 export function ClientDetailPage() {
   const { id = '' } = useParams();
   const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>('overview');
   const [data, setData] = useState<ClientDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -54,14 +56,23 @@ export function ClientDetailPage() {
 
   // Messages after returning from Google.
   useEffect(() => {
-    if (params.get('connected'))
+    const connected = params.get('connected');
+    if (connected && connected !== '1' && connected !== 'data') {
+      setTab(connected === 'gbp' ? 'local' : (connected as Tab));
+      setNotice({
+        kind: 'success',
+        text: 'Google account connected. Now choose what to track below.',
+      });
+    } else if (connected)
       setNotice({
         kind: 'success',
         text: 'Google account connected. Now pick the Search Console site and GA4 property.',
       });
+    const tabParam = params.get('tab');
+    if (tabParam) setTab(tabParam === 'gbp' ? 'local' : (tabParam as Tab));
     const err = params.get('connect_error');
     if (err) setNotice({ kind: 'error', text: CONNECT_ERRORS[err] ?? 'Google connection failed.' });
-    if (params.get('connected') || err) setParams({}, { replace: true });
+    if (params.get('connected') || err || tabParam) setParams({}, { replace: true });
   }, [params, setParams]);
 
   // While a job is running, refresh every 5 seconds.
@@ -119,229 +130,294 @@ export function ClientDetailPage() {
 
       {notice && <Alert kind={notice.kind}>{notice.text}</Alert>}
 
-      <ConnectionCard data={data} onChange={load} onNotice={setNotice} />
-
-      {data.pending.healthCheck && (
-        <Alert kind="info">
-          ⟳ Health check is running. This page updates automatically (usually 1-2 minutes).
-        </Alert>
+      <ClientTabs tab={tab} onChange={setTab} />
+      {tab !== 'overview' && (
+        <ChannelPanel
+          tab={tab}
+          clientId={client.id}
+          notify={(kind, text) => setNotice({ kind, text })}
+        />
       )}
 
-      {!check && !data.pending.healthCheck && (
-        <Card className="py-10 text-center">
-          <h2 className="font-semibold">No health check yet</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-            Run the first check now. Speed works right away; Search Console and Analytics need the
-            Google account connected.
-          </p>
-        </Card>
-      )}
+      <div className={tab === 'overview' ? 'space-y-6' : 'hidden'}>
+        <ConnectionCard data={data} onChange={load} onNotice={setNotice} />
 
-      {check && (
-        <>
-          <Card>
-            <div className="flex flex-wrap items-center gap-5">
-              <ScoreBadge score={check.score} size="lg" />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold">Health score</h2>
-                  <StatusBadge status={check.status} />
-                  <span className="text-xs text-slate-400">formula v{check.formulaVersion}</span>
-                </div>
-                <p className="text-sm text-slate-500">
-                  Last checked {formatDateTime(check.runAt)} · last 28 days vs previous 28 days
-                </p>
-                {check.breakdown && <Breakdown b={check.breakdown} />}
-              </div>
-            </div>
-            {Object.keys(check.errors).length > 0 && (
-              <ul className="mt-4 space-y-1 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                {Object.entries(check.errors).map(([k, v]) => (
-                  <li key={k}>
-                    ⚠ <b>{SOURCE_LABEL[k] ?? k}:</b> {v}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+        {data.pending.healthCheck && (
+          <Alert kind="info">
+            ⟳ Health check is running. This page updates automatically (usually 1-2 minutes).
+          </Alert>
+        )}
 
-          <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Kpi
-              label="Search clicks"
-              value={formatNumber(gsc?.totals.current.clicks)}
-              sub={gsc && <ChangePill pct={gsc.clicksChangePct} />}
-            />
-            <Kpi
-              label="Impressions"
-              value={formatNumber(gsc?.totals.current.impressions)}
-              sub={gsc && <ChangePill pct={gsc.impressionsChangePct} />}
-            />
-            <Kpi
-              label="Avg. Google position"
-              value={gsc ? gsc.totals.current.position.toFixed(1) : '—'}
-              sub={
-                gsc && (
-                  <span className="text-xs text-slate-500">
-                    CTR {(gsc.totals.current.ctr * 100).toFixed(1)}%
-                  </span>
-                )
-              }
-            />
-            <Kpi
-              label="Organic sessions"
-              value={formatNumber(ga4?.organicSessions?.current ?? null)}
-              sub={ga4?.organicSessions && <ChangePill pct={ga4.organicSessions.changePct} />}
-            />
-            <Kpi
-              label="All sessions"
-              value={formatNumber(ga4?.totals.current.sessions)}
-              sub={ga4 && <ChangePill pct={ga4.sessionsChangePct} />}
-            />
-            <Kpi
-              label="Users / new users"
-              value={
-                ga4
-                  ? `${formatNumber(ga4.totals.current.users)} / ${formatNumber(ga4.totals.current.newUsers ?? null)}`
-                  : '—'
-              }
-              sub={ga4 && <ChangePill pct={ga4.usersChangePct} />}
-            />
-            <Kpi
-              label="Key events (leads)"
-              value={formatNumber(ga4?.totals.current.keyEvents)}
-              sub={ga4 && <ChangePill pct={ga4.keyEventsChangePct} />}
-            />
-            <Kpi
-              label="Engagement rate"
-              value={ga4 ? `${ga4.totals.current.engagementRate}%` : '—'}
-            />
-          </section>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SpeedCard label="Mobile" s={mobile} />
-            <SpeedCard label="Desktop" s={desktop} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card>
-              <h3 className="mb-3 text-sm font-semibold">Daily search clicks</h3>
-              <TrendChart
-                data={gsc?.dailyClicks ?? []}
-                xKey="date"
-                yKey="clicks"
-                name="Clicks"
-                formatX={(v) => formatDay(String(v))}
-              />
-            </Card>
-            <Card>
-              <h3 className="mb-3 text-sm font-semibold">Daily sessions</h3>
-              <TrendChart
-                data={ga4?.dailySessions ?? []}
-                xKey="date"
-                yKey="sessions"
-                name="Sessions"
-                formatX={(v) => formatDay(String(v))}
-              />
-            </Card>
-            <Card>
-              <h3 className="mb-3 text-sm font-semibold">Mobile speed score over time</h3>
-              <TrendChart
-                data={data.history.filter((h) => h.mobileSpeed !== null)}
-                xKey="runAt"
-                yKey="mobileSpeed"
-                name="Mobile speed"
-                formatX={(v) => formatDate(Number(v))}
-                yDomain={[0, 100]}
-              />
-            </Card>
-          </div>
-        </>
-      )}
-
-      {insight && <InsightCard insight={insight} />}
-      {!insight && check && !data.pending.healthCheck && (
-        <Alert kind="info">
-          Action items will appear here after a health check with data.{' '}
-          {check.errors.ai && `(${check.errors.ai})`}
-        </Alert>
-      )}
-
-      {check && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <h3 className="font-semibold">Quick-win keywords</h3>
-            <p className="mb-3 text-xs text-slate-500">
-              Ranking at positions 8-20: a small push can move them to page 1.
+        {!check && !data.pending.healthCheck && (
+          <Card className="py-10 text-center">
+            <h2 className="font-semibold">No health check yet</h2>
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+              Run the first check now. Speed works right away; Search Console and Analytics need the
+              Google account connected.
             </p>
-            <Table
-              empty={gsc ? 'No quick wins found' : 'Search Console not connected'}
-              head={['Keyword', 'Impressions', 'Position']}
-              rows={(gsc?.quickWins ?? []).map((q) => [
-                q.query,
-                formatNumber(q.impressions),
-                q.position.toFixed(1),
-              ])}
-            />
           </Card>
-          <Card>
-            <h3 className="font-semibold">Pages losing clicks</h3>
-            <p className="mb-3 text-xs text-slate-500">Biggest drop vs the previous 28 days.</p>
-            <Table
-              empty={gsc ? 'No pages lost clicks 🎉' : 'Search Console not connected'}
-              head={['Page', 'Before', 'Now']}
-              rows={(gsc?.droppingPages ?? []).map((p) => [
-                shortUrl(p.page),
-                formatNumber(p.clicksBefore),
-                formatNumber(p.clicksNow),
-              ])}
-            />
-          </Card>
-          <Card>
-            <h3 className="font-semibold">Top search queries</h3>
-            <Table
-              empty={gsc ? 'No queries yet' : 'Search Console not connected'}
-              head={['Query', 'Clicks', 'Position']}
-              rows={(gsc?.topQueries ?? [])
-                .slice(0, 8)
-                .map((q) => [q.query, formatNumber(q.clicks), q.position.toFixed(1)])}
-            />
-          </Card>
-          <Card>
-            <h3 className="font-semibold">Top pages (search)</h3>
-            <Table
-              empty={gsc ? 'No pages yet' : 'Search Console not connected'}
-              head={['Page', 'Clicks', 'Position']}
-              rows={(gsc?.topPages ?? [])
-                .slice(0, 8)
-                .map((p) => [shortUrl(p.page), formatNumber(p.clicks), p.position.toFixed(1)])}
-            />
-          </Card>
-          <Card>
-            <h3 className="font-semibold">Top traffic channels</h3>
-            <Table
-              empty={ga4 ? 'No channel data' : 'Analytics not connected'}
-              head={['Channel', 'Sessions']}
-              rows={(ga4?.topChannels ?? []).map((c) => [c.channel, formatNumber(c.sessions)])}
-            />
-          </Card>
-          <Card>
-            <h3 className="font-semibold">Top landing pages</h3>
-            <Table
-              empty={ga4 ? 'No landing page data' : 'Analytics not connected'}
-              head={['Page', 'Sessions', 'Key events']}
-              rows={(ga4?.topLandingPages ?? []).map((p) => [
-                p.page,
-                formatNumber(p.sessions),
-                formatNumber(p.keyEvents),
-              ])}
-            />
-          </Card>
-        </div>
-      )}
+        )}
 
-      <ReportsCard data={data} onChange={load} onNotice={setNotice} />
+        {check && (
+          <>
+            <Card>
+              <div className="flex flex-wrap items-center gap-5">
+                <ScoreBadge score={check.score} size="lg" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold">Health score</h2>
+                    <StatusBadge status={check.status} />
+                    <span className="text-xs text-slate-400">formula v{check.formulaVersion}</span>
+                  </div>
+                  <p className="text-sm text-slate-500">
+                    Last checked {formatDateTime(check.runAt)} · last 28 days vs previous 28 days
+                  </p>
+                  {check.breakdown && <Breakdown b={check.breakdown} />}
+                </div>
+              </div>
+              {Object.keys(check.errors).length > 0 && (
+                <ul className="mt-4 space-y-1 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                  {Object.entries(check.errors).map(([k, v]) => (
+                    <li key={k}>
+                      ⚠ <b>{SOURCE_LABEL[k] ?? k}:</b> {v}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <Kpi
+                label="Search clicks"
+                value={formatNumber(gsc?.totals.current.clicks)}
+                sub={gsc && <ChangePill pct={gsc.clicksChangePct} />}
+              />
+              <Kpi
+                label="Impressions"
+                value={formatNumber(gsc?.totals.current.impressions)}
+                sub={gsc && <ChangePill pct={gsc.impressionsChangePct} />}
+              />
+              <Kpi
+                label="Avg. Google position"
+                value={gsc ? gsc.totals.current.position.toFixed(1) : '—'}
+                sub={
+                  gsc && (
+                    <span className="text-xs text-slate-500">
+                      CTR {(gsc.totals.current.ctr * 100).toFixed(1)}%
+                    </span>
+                  )
+                }
+              />
+              <Kpi
+                label="Organic sessions"
+                value={formatNumber(ga4?.organicSessions?.current ?? null)}
+                sub={ga4?.organicSessions && <ChangePill pct={ga4.organicSessions.changePct} />}
+              />
+              <Kpi
+                label="All sessions"
+                value={formatNumber(ga4?.totals.current.sessions)}
+                sub={ga4 && <ChangePill pct={ga4.sessionsChangePct} />}
+              />
+              <Kpi
+                label="Users / new users"
+                value={
+                  ga4
+                    ? `${formatNumber(ga4.totals.current.users)} / ${formatNumber(ga4.totals.current.newUsers ?? null)}`
+                    : '—'
+                }
+                sub={ga4 && <ChangePill pct={ga4.usersChangePct} />}
+              />
+              <Kpi
+                label="Key events (leads)"
+                value={formatNumber(ga4?.totals.current.keyEvents)}
+                sub={ga4 && <ChangePill pct={ga4.keyEventsChangePct} />}
+              />
+              <Kpi
+                label="Engagement rate"
+                value={ga4 ? `${ga4.totals.current.engagementRate}%` : '—'}
+              />
+            </section>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <SpeedCard label="Mobile" s={mobile} />
+              <SpeedCard label="Desktop" s={desktop} />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Card>
+                <h3 className="mb-3 text-sm font-semibold">Daily search clicks</h3>
+                <TrendChart
+                  data={gsc?.dailyClicks ?? []}
+                  xKey="date"
+                  yKey="clicks"
+                  name="Clicks"
+                  formatX={(v) => formatDay(String(v))}
+                />
+              </Card>
+              <Card>
+                <h3 className="mb-3 text-sm font-semibold">Daily sessions</h3>
+                <TrendChart
+                  data={ga4?.dailySessions ?? []}
+                  xKey="date"
+                  yKey="sessions"
+                  name="Sessions"
+                  formatX={(v) => formatDay(String(v))}
+                />
+              </Card>
+              <Card>
+                <h3 className="mb-3 text-sm font-semibold">Mobile speed score over time</h3>
+                <TrendChart
+                  data={data.history.filter((h) => h.mobileSpeed !== null)}
+                  xKey="runAt"
+                  yKey="mobileSpeed"
+                  name="Mobile speed"
+                  formatX={(v) => formatDate(Number(v))}
+                  yDomain={[0, 100]}
+                />
+              </Card>
+            </div>
+          </>
+        )}
+
+        {insight && <InsightCard insight={insight} />}
+        {!insight && check && !data.pending.healthCheck && (
+          <Alert kind="info">
+            Action items will appear here after a health check with data.{' '}
+            {check.errors.ai && `(${check.errors.ai})`}
+          </Alert>
+        )}
+
+        {check && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <h3 className="font-semibold">Quick-win keywords</h3>
+              <p className="mb-3 text-xs text-slate-500">
+                Ranking at positions 8-20: a small push can move them to page 1.
+              </p>
+              <Table
+                empty={gsc ? 'No quick wins found' : 'Search Console not connected'}
+                head={['Keyword', 'Impressions', 'Position']}
+                rows={(gsc?.quickWins ?? []).map((q) => [
+                  q.query,
+                  formatNumber(q.impressions),
+                  q.position.toFixed(1),
+                ])}
+              />
+            </Card>
+            <Card>
+              <h3 className="font-semibold">Pages losing clicks</h3>
+              <p className="mb-3 text-xs text-slate-500">Biggest drop vs the previous 28 days.</p>
+              <Table
+                empty={gsc ? 'No pages lost clicks 🎉' : 'Search Console not connected'}
+                head={['Page', 'Before', 'Now']}
+                rows={(gsc?.droppingPages ?? []).map((p) => [
+                  shortUrl(p.page),
+                  formatNumber(p.clicksBefore),
+                  formatNumber(p.clicksNow),
+                ])}
+              />
+            </Card>
+            <Card>
+              <h3 className="font-semibold">Top search queries</h3>
+              <Table
+                empty={gsc ? 'No queries yet' : 'Search Console not connected'}
+                head={['Query', 'Clicks', 'Position']}
+                rows={(gsc?.topQueries ?? [])
+                  .slice(0, 8)
+                  .map((q) => [q.query, formatNumber(q.clicks), q.position.toFixed(1)])}
+              />
+            </Card>
+            <Card>
+              <h3 className="font-semibold">Top pages (search)</h3>
+              <Table
+                empty={gsc ? 'No pages yet' : 'Search Console not connected'}
+                head={['Page', 'Clicks', 'Position']}
+                rows={(gsc?.topPages ?? [])
+                  .slice(0, 8)
+                  .map((p) => [shortUrl(p.page), formatNumber(p.clicks), p.position.toFixed(1)])}
+              />
+            </Card>
+            <Card>
+              <h3 className="font-semibold">Top traffic channels</h3>
+              <Table
+                empty={ga4 ? 'No channel data' : 'Analytics not connected'}
+                head={['Channel', 'Sessions']}
+                rows={(ga4?.topChannels ?? []).map((c) => [c.channel, formatNumber(c.sessions)])}
+              />
+            </Card>
+            <Card>
+              <h3 className="font-semibold">Top landing pages</h3>
+              <Table
+                empty={ga4 ? 'No landing page data' : 'Analytics not connected'}
+                head={['Page', 'Sessions', 'Key events']}
+                rows={(ga4?.topLandingPages ?? []).map((p) => [
+                  p.page,
+                  formatNumber(p.sessions),
+                  formatNumber(p.keyEvents),
+                ])}
+              />
+            </Card>
+          </div>
+        )}
+
+        <ReportsCard data={data} onChange={load} onNotice={setNotice} />
+      </div>
     </div>
   );
+}
+
+type Tab = 'overview' | 'local' | 'ads' | 'youtube' | 'exports';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'local', label: 'Local SEO & reviews' },
+  { id: 'ads', label: 'Google Ads' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'exports', label: 'Exports' },
+];
+
+function ClientTabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Client sections"
+      className="-mx-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-4"
+    >
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={tab === t.id}
+          onClick={() => onChange(t.id)}
+          className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+            tab === t.id
+              ? 'border-[var(--brand)] text-[var(--brand)]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChannelPanel({
+  tab,
+  clientId,
+  notify,
+}: {
+  tab: Exclude<Tab, 'overview'>;
+  clientId: string;
+  notify: (kind: Notice['kind'], text: string) => void;
+}) {
+  const { data, error, reload } = useIntegrations(clientId);
+  if (error) return <Alert>{error}</Alert>;
+  if (!data) return <DetailSkeleton />;
+  const props = { clientId, data, reload, notify };
+  if (tab === 'local') return <LocalSeoTab {...props} />;
+  if (tab === 'ads') return <AdsTab {...props} />;
+  if (tab === 'youtube') return <YouTubeTab {...props} />;
+  return <ExportsTab {...props} />;
 }
 
 function shortUrl(u: string) {

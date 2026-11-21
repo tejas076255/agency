@@ -60,7 +60,29 @@ export function PrivacyPage() {
           <b>Gmail (send only)</b>: to email the monthly report from the agency’s own Gmail. We
           cannot read any email.
         </li>
+        <li>
+          <b>Google Business Profile</b> (optional): listing details, performance (calls, direction
+          requests, website clicks), and reviews; and posting review replies when the agency writes
+          one.
+        </li>
+        <li>
+          <b>Google Ads (read-only use)</b> (optional): campaign performance, spend and search
+          terms.
+        </li>
+        <li>
+          <b>YouTube (read-only)</b> (optional): channel details and channel analytics, connected by
+          the channel owner.
+        </li>
+        <li>
+          <b>Google Sheets / Drive (files created by the app)</b>: exporting data to a spreadsheet
+          in the agency’s Drive.
+        </li>
       </ul>
+      <p>
+        Review text may be analysed by the Google Cloud Natural Language API to estimate sentiment.
+        Competitor ratings are fetched live from Google Places and are not stored; only place IDs
+        are saved.
+      </p>
       <p>
         Agency Autopilot’s use and transfer of information received from Google APIs adheres to the{' '}
         <a

@@ -11,7 +11,7 @@ import { Alert, Button, Card, Field, inputClass } from '../components/ui';
 import { api, setCsrfToken, type Agency } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
-import type { AuditLogRow, ReportSettings } from '../lib/types';
+import type { AuditLogRow, ReportSettings, TeamMember } from '../lib/types';
 
 type Msg = { kind: 'success' | 'error'; text: string } | null;
 
@@ -34,6 +34,7 @@ export function SettingsPage() {
       )}
       <WorkspaceCard isOwner={isOwner} />
       <ReportSettingsForm isOwner={isOwner} />
+      <TeamCard isOwner={isOwner} />
       <AccountCard />
       {isOwner && <AuditLogCard />}
     </div>
@@ -290,6 +291,160 @@ function AuditLogCard() {
             </li>
           ))}
         </ul>
+      )}
+    </Card>
+  );
+}
+
+function TeamCard({ isOwner }: { isOwner: boolean }) {
+  const confirm = useConfirm();
+  const [data, setData] = useState<{
+    members: TeamMember[];
+    invites: { id: string; email: string; expiresAt: number }[];
+  } | null>(null);
+  const [email, setEmail] = useState('');
+  const [sendEmail, setSendEmail] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Msg>(null);
+  const [link, setLink] = useState<string | null>(null);
+
+  const load = () =>
+    api<{ members: TeamMember[]; invites: { id: string; email: string; expiresAt: number }[] }>(
+      '/api/team',
+    )
+      .then(setData)
+      .catch(() => undefined);
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function invite() {
+    setBusy(true);
+    setMsg(null);
+    setLink(null);
+    try {
+      const r = await api<{ url: string; emailed: boolean; emailError: string | null }>(
+        '/api/team/invites',
+        {
+          method: 'POST',
+          body: { email, sendEmail },
+        },
+      );
+      setLink(r.url);
+      setMsg({
+        kind: 'success',
+        text: r.emailed
+          ? `Invite emailed to ${email}.`
+          : `Invite created.${r.emailError ? ` (Email not sent: ${r.emailError})` : ''} Share the link below.`,
+      });
+      setEmail('');
+      await load();
+    } catch (e) {
+      setMsg({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(m: TeamMember) {
+    if (
+      !(await confirm({
+        title: `Remove ${m.name}?`,
+        message: 'They lose access immediately and their clients are unassigned.',
+        confirmLabel: 'Remove',
+        danger: true,
+      }))
+    )
+      return;
+    await api(`/api/team/members/${m.id}`, { method: 'DELETE' }).catch((e: Error) =>
+      setMsg({ kind: 'error', text: e.message }),
+    );
+    await load();
+  }
+
+  async function revoke(id: string) {
+    await api(`/api/team/invites/${id}`, { method: 'DELETE' }).catch(() => undefined);
+    await load();
+  }
+
+  return (
+    <Card>
+      <h2 className="font-semibold">Team</h2>
+      <p className="text-sm text-slate-500">
+        Members see and work on the clients assigned to them. Assign clients on the client’s Edit
+        page.
+      </p>
+      {!data ? (
+        <Skeleton className="mt-3 h-20" />
+      ) : (
+        <ul className="mt-3 divide-y divide-slate-100 text-sm">
+          {data.members.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span>
+                <b className="font-medium">{m.name}</b>{' '}
+                <span className="text-slate-500">· {m.email}</span>{' '}
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs capitalize">
+                  {m.role}
+                </span>
+                {m.role === 'member' && (
+                  <span className="ml-1 text-xs text-slate-500">{m.assignedClients} client(s)</span>
+                )}
+              </span>
+              {isOwner && m.role === 'member' && (
+                <button
+                  className="text-xs text-red-600 hover:underline"
+                  onClick={() => void remove(m)}
+                >
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+          {data.invites.map((i) => (
+            <li key={i.id} className="flex items-center justify-between gap-2 py-2 text-slate-500">
+              <span>
+                ✉ {i.email} · invited, expires {formatDateTime(i.expiresAt)}
+              </span>
+              <button
+                className="text-xs text-red-600 hover:underline"
+                onClick={() => void revoke(i.id)}
+              >
+                Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {isOwner && (
+        <div className="mt-4 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <input
+              className={`${inputClass} max-w-xs`}
+              type="email"
+              placeholder="teammate@gmail.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-label="Teammate email"
+            />
+            <Button loading={busy} disabled={!/^\S+@\S+\.\S+$/.test(email)} onClick={invite}>
+              Invite
+            </Button>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={sendEmail}
+              onChange={(e) => setSendEmail(e.target.checked)}
+            />{' '}
+            Email the invite from the agency Gmail
+          </label>
+          {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
+          {link && (
+            <p className="break-all rounded bg-slate-50 p-2 text-xs text-slate-600">
+              Invite link (valid 7 days, works only for that email): {link}
+            </p>
+          )}
+        </div>
       )}
     </Card>
   );

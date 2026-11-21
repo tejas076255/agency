@@ -72,3 +72,20 @@ OAuth transactions are stored in KV (10-minute TTL, single use) instead of a D1 
   exceed it → Workers Paid ($5/month) recommended before real use.
 - **KV free plan: 1,000 writes/day** (sessions, rate limits, token cache, PDFs).
 - Workers AI free: 10,000 neurons/day.
+
+## Phase 2 / 3 / 4 additions
+
+- **Per-client product connections**: `google_connections.purpose` = `client_data` (GSC + GA4), `client_business`,
+  `client_ads`, `client_youtube`; the client stores `gbp_location_name`, `ads_customer_id`, `youtube_channel_id`.
+  Only `client_data` revocation flips the client to "Reconnect needed".
+- **Sync**: `src/jobs/integrations.ts` runs inside `runHealthCheck` in parallel with GSC/GA4/PageSpeed and writes
+  `integration_snapshots` (one JSON summary per product per run), upserts `reviews`, and runs Natural Language
+  sentiment for new reviews (`review_sentiments`, separate from the original review data).
+- **AI**: the compact summary includes local business, reviews, Ads and YouTube sections; fallback rules cover wasted
+  ad spend, negative/unanswered reviews, incomplete listings and falling YouTube views.
+- **Routes**: `src/routes/integrations.ts` (`/api/clients/:id/integrations|reviews|competitors|exports|assignee`,
+  `/api/channels/overview`) and `src/routes/team.ts` (`/api/team`, `/api/billing`).
+- **UI**: client tabs (Overview, Local SEO & reviews, Google Ads, YouTube, Exports) and agency pages
+  (Local SEO, Advertising, YouTube, Plan).
+- **Plans**: `src/lib/plans.ts` enforces limits (HTTP 402). No payment provider.
+- New tables: integration_snapshots, reviews, review_sentiments, competitors (place IDs only), sheets_exports, invitations.

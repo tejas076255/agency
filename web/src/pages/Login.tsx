@@ -17,6 +17,8 @@ const ERRORS: Record<string, string> = {
 export function LoginPage() {
   const [params] = useSearchParams();
   const errorCode = params.get('error');
+  const invite = params.get('invite');
+  const validInvite = invite && /^[A-Za-z0-9_-]{43}$/.test(invite) ? invite : null;
   const [siteKey, setSiteKey] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [widgetError, setWidgetError] = useState<string | null>(null);
@@ -61,6 +63,17 @@ export function LoginPage() {
           // Plain form POST: the Worker verifies Turnstile, then redirects to Google.
           <form method="POST" action="/auth/google/login" onSubmit={() => setSubmitting(true)}>
             <input type="hidden" name="cf-turnstile-response" value={token ?? ''} />
+            {validInvite && (
+              <>
+                <input type="hidden" name="invite" value={validInvite} />
+                <div className="mb-4">
+                  <Alert kind="info">
+                    You’ve been invited to join an agency. Sign in with the Google account the
+                    invite was sent to.
+                  </Alert>
+                </div>
+              </>
+            )}
             {siteKey && (
               <div className="mb-4 flex justify-center">
                 <Turnstile siteKey={siteKey} onToken={onToken} onError={onError} />
