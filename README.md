@@ -293,7 +293,7 @@ Repository: https://github.com/tejas076255/agency
 - **Cloudflare Workers Builds** is connected to the repo and deploys `main` automatically. Settings used
   (Cloudflare dashboard, Workers & Pages, agency-autopilot, Settings, Build):
   - Git repository: `tejas076255/agency`, production branch `main`
-  - Build command: `npm install && npm run build` (use `npm install`, not `npm ci`: the lockfile is made on Windows)
+  - Build command: `npm run build` (Cloudflare installs dependencies from `package-lock.json` first; `.npmrc` keeps the Windows-made lockfile valid on Linux)
   - Deploy command: `npx wrangler deploy`
   - Root directory: `/`
 - Secrets are **not** in the repo. They stay as Worker secrets (`npx wrangler secret put ...`) and keep working
