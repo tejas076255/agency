@@ -1,0 +1,20 @@
+# Copy this file to .dev.vars and fill in real values.
+# .dev.vars is gitignored. NEVER commit real secrets.
+# For production use: npx wrangler secret put <NAME>
+
+# Local app URL (overrides the production APP_URL in wrangler.jsonc)
+APP_URL=http://localhost:5173
+
+# Google OAuth client (Google Cloud Console -> APIs & Services -> Credentials)
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
+
+# 32 random bytes, base64 encoded. Used to encrypt Google refresh tokens (AES-GCM).
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+TOKEN_ENCRYPTION_KEY=
+
+# PageSpeed Insights API key (Google Cloud Console -> Credentials -> API key)
+PAGESPEED_API_KEY=
+
+# Turnstile secret. The value below is Cloudflare's official "always passes" test key for local dev.
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

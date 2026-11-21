@@ -1,0 +1,59 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agency-autopilot",
+  // Cloudflare account ID (not a secret).
+  "account_id": "8803d1a408d341bee1176664777a5720",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // React app built by Vite. API, auth and public report routes hit the Worker first.
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/auth/*", "/r/*"],
+  },
+
+  // Resource IDs are not secrets. Local dev (`wrangler dev`) still uses local copies in .wrangler/.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "agency-autopilot",
+      "database_id": "c09f667c-3b11-4b03-a9e7-029b05119892",
+      "migrations_dir": "migrations",
+    },
+  ],
+  // KV: sessions, API response cache and report PDFs. (No R2: logos live in D1, PDFs in KV.)
+  "kv_namespaces": [{ "binding": "KV", "id": "f9c226d98bcc486f9d967a08d4d60b47" }],
+
+  "queues": {
+    "producers": [{ "binding": "JOBS_QUEUE", "queue": "agency-jobs" }],
+    "consumers": [
+      {
+        "queue": "agency-jobs",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "agency-jobs-dlq",
+      },
+    ],
+  },
+
+  // Cron times are UTC. 00:30 UTC = 06:00 IST.
+  //  - Weekly health check: every Monday 06:00 IST
+  //  - Monthly report: 1st of every month 06:00 IST
+  "triggers": { "crons": ["30 0 * * 1", "30 0 1 * *"] },
+
+  "ai": { "binding": "AI" },
+
+  "vars": {
+    // Production URL. Locally this is overridden by APP_URL in .dev.vars.
+    "APP_URL": "https://agency-autopilot.invoice-to-excel.workers.dev",
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_GATEWAY_ID": "agency-autopilot",
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+  },
+
+  "observability": { "enabled": true },
+}

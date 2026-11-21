@@ -1,0 +1,9 @@
+// Minimal config used only by tests (getPlatformProxy): local in-memory D1 + KV, no remote bindings.
+{
+  "name": "agency-autopilot-test",
+  "main": "../src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "test-db", "database_id": "test-db" }],
+  "kv_namespaces": [{ "binding": "KV", "id": "test-kv" }],
+}
