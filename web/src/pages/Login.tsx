@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Turnstile } from '../components/Turnstile';
 import { Alert, Card, Spinner } from '../components/ui';
 import { api } from '../lib/api';
@@ -79,6 +79,15 @@ export function LoginPage() {
 
         <p className="mt-6 text-center text-xs text-slate-400">
           New here? Signing in creates your account.
+        </p>
+        <p className="mt-2 text-center text-xs text-slate-400">
+          <Link to="/privacy" className="hover:underline">
+            Privacy Policy
+          </Link>{' '}
+          ·{' '}
+          <Link to="/terms" className="hover:underline">
+            Terms of Service
+          </Link>
         </p>
       </Card>
     </main>

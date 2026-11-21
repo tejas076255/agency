@@ -115,10 +115,14 @@ describe('session lifecycle through the API', () => {
     expect((await me(`sid=${a.id}`)).body.user).toBeNull();
     expect((await me(`sid=${b.id}`)).body.user).toBeNull();
     // New sessions (after a fresh login) use the new version and work again.
-    const v = await env.DB.prepare(`SELECT session_version AS v FROM users WHERE id='u1'`).first<{ v: number }>();
+    const v = await env.DB.prepare(`SELECT session_version AS v FROM users WHERE id='u1'`).first<{
+      v: number;
+    }>();
     const fresh = await createSession(env.KV, 'u1', v!.v);
     expect((await me(`sid=${fresh.id}`)).body.user?.id).toBe('u1');
-    const log = await env.DB.prepare(`SELECT action FROM audit_logs WHERE action='auth.logout_all'`).first();
+    const log = await env.DB.prepare(
+      `SELECT action FROM audit_logs WHERE action='auth.logout_all'`,
+    ).first();
     expect(log).not.toBeNull();
   });
 });

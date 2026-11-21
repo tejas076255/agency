@@ -144,13 +144,9 @@ export async function getAccessToken(env: Env, conn: Connection): Promise<string
   }
 
   const ttl = Math.max(60, data.expires_in - 300);
-  await env.KV.put(
-    accessTokenKey(conn.id),
-    await encryptSecret(data.access_token, ring),
-    {
-      expirationTtl: ttl,
-    },
-  );
+  await env.KV.put(accessTokenKey(conn.id), await encryptSecret(data.access_token, ring), {
+    expirationTtl: ttl,
+  });
   return data.access_token;
 }
 

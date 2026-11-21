@@ -338,7 +338,10 @@ export async function generateReport(
 }
 
 /** Fills {client}, {month}, {agency} in a report email template. */
-export function fillTemplate(template: string, data: Pick<ReportData, 'client' | 'monthLabel' | 'agency'>) {
+export function fillTemplate(
+  template: string,
+  data: Pick<ReportData, 'client' | 'monthLabel' | 'agency'>,
+) {
   return template
     .replaceAll('{client}', data.client.name)
     .replaceAll('{month}', data.monthLabel)
@@ -431,7 +434,11 @@ export async function sendReportEmail(env: Env, agencyId: string, reportId: stri
  * Re-exports the PDF from the report's Google Slides file (after manual edits in Slides)
  * and replaces the stored PDF. Works for reports that are ready or already sent.
  */
-export async function refreshReportPdf(env: Env, agencyId: string, reportId: string): Promise<void> {
+export async function refreshReportPdf(
+  env: Env,
+  agencyId: string,
+  reportId: string,
+): Promise<void> {
   const db = getDb(env);
   const report = await db.query.reports.findFirst({
     where: and(eq(reports.id, reportId), eq(reports.agencyId, agencyId)),
@@ -445,6 +452,10 @@ export async function refreshReportPdf(env: Env, agencyId: string, reportId: str
   await env.KV.put(pdfKvKey(reportId), pdf, { metadata: { contentType: 'application/pdf' } });
   await db
     .update(reports)
-    .set({ pdfKvKey: pdfKvKey(reportId), error: null, status: report.status === 'failed' ? 'ready' : report.status })
+    .set({
+      pdfKvKey: pdfKvKey(reportId),
+      error: null,
+      status: report.status === 'failed' ? 'ready' : report.status,
+    })
     .where(and(eq(reports.id, reportId), eq(reports.agencyId, agencyId)));
 }

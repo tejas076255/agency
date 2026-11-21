@@ -10,7 +10,15 @@ accounts once; the app runs weekly health checks (SEO, traffic, site speed), use
 Workers AI (+ AI Gateway) · Turnstile · React + Vite + Tailwind (Workers Static Assets) ·
 Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gmail APIs.
 
-> Status: **Phase 1 complete.** Phases 2 and 3 are not started (see "Roadmap").
+> Status: **Phase 1 code complete** (see [PROJECT_STATUS.md](PROJECT_STATUS.md) for what is verified and what
+> still needs the owner's test with real Google accounts). Phases 2-4 not started.
+
+**Docs:** [Project status](PROJECT_STATUS.md) · [Architecture](docs/ARCHITECTURE.md) ·
+[API integrations & readiness](docs/API_INTEGRATIONS.md) · [Security](docs/SECURITY.md) ·
+[Health score](docs/HEALTH_SCORE.md)
+
+> Storage note: the spec mentions R2, but by the owner's decision **R2 is not used**. Logos are stored in D1
+> and report PDFs in KV.
 
 ---
 
@@ -32,6 +40,10 @@ Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gma
 | Monthly report: Slides template → fill → PDF (stored in KV) → Gmail → share link `/r/:token` | `src/jobs/report.ts`, `src/routes/public.ts`              |
 | "Preview & send manually" or auto-send per client                                            | Client page → Monthly reports                             |
 | Job logs with errors + "Run now"                                                             | `web/src/pages/Jobs.tsx`                                  |
+| Edit report in Google Slides → "Re-export PDF"; report email settings (subject, message, CC) | `src/jobs/report.ts`, `web/src/pages/Settings.tsx`        |
+| Audit log, API usage (quota) tracking, logout from all devices                               | `src/lib/audit.ts`, `src/lib/usage.ts`                    |
+| AI fallback: rule-based 5 actions when AI fails; metric-grounding check                      | `src/lib/insights.ts`                                     |
+| Privacy policy and terms pages (for the Google consent screen)                               | `web/src/pages/Legal.tsx` (`/privacy`, `/terms`)          |
 
 Times are shown in IST; numbers use Indian grouping (1,23,456).
 
@@ -172,21 +184,9 @@ Workers AI directly. To switch models, change `vars.AI_MODEL` (all AI calls go t
 
 ## Health score formula
 
-100 points from three sections (`src/lib/score.ts`):
-
-| Section              | Metric                           | Points | Scale                                                             |
-| -------------------- | -------------------------------- | ------ | ----------------------------------------------------------------- |
-| SEO (Search Console) | Clicks trend vs previous 28 days | 20     | −50% or worse = 0 · no change = 10 · +50% or better = 20 (linear) |
-|                      | Average position                 | 10     | ≤ 3 = 10 · ≥ 30 = 0 (linear)                                      |
-|                      | Click-through rate               | 10     | ≥ 5% = 10 · 0% = 0 (linear)                                       |
-| Traffic (GA4)        | Sessions trend                   | 20     | same scale as clicks trend                                        |
-|                      | Engagement rate                  | 10     | ≥ 60% = 10 · 0% = 0 (linear)                                      |
-| Speed (PageSpeed)    | Mobile performance               | 20     | Lighthouse score / 100 × 20                                       |
-|                      | Desktop performance              | 10     | Lighthouse score / 100 × 10                                       |
-
-Missing sections (not connected / API failed) are left out and the score is re-scaled:
-`score = earned / max_available × 100`. Example: only Speed available with 24/30 → **80**.
-A trend that can't be computed (previous period was 0) counts as "no change".
+Formula v2: Search performance **35** · Organic traffic **30** · Website performance **25** ·
+Data completeness **10**. Full rules, missing-data handling and worked examples:
+**[docs/HEALTH_SCORE.md](docs/HEALTH_SCORE.md)**.
 
 ## Jobs and reliability
 
@@ -230,7 +230,7 @@ the app for **verification** (privacy policy, homepage, demo video) for the four
 ## Testing
 
 ```bash
-npm test          # Vitest: 65 tests
+npm test          # Vitest: 112 tests
 npm run typecheck # strict TypeScript (Worker + web)
 npm run lint
 ```

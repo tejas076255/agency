@@ -147,7 +147,11 @@ export function summarizeGa4(input: {
     };
   };
   const organicRows = input.organic?.rows;
-  const organicOf = (name: string) => num(organicRows?.find((x) => dim(x) === name), 0);
+  const organicOf = (name: string) =>
+    num(
+      organicRows?.find((x) => dim(x) === name),
+      0,
+    );
   const current = pick('current');
   const previous = pick('previous');
   const change = (a: number, b: number) => {

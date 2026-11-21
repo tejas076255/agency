@@ -12,7 +12,9 @@ describe('parseInsightOutput', () => {
   });
 
   it('extracts JSON wrapped in extra text (common LLM habit)', () => {
-    const r = parseInsightOutput('Sure! Here it is:\n```json\n' + JSON.stringify(validAiOutput) + '\n```');
+    const r = parseInsightOutput(
+      'Sure! Here it is:\n```json\n' + JSON.stringify(validAiOutput) + '\n```',
+    );
     expect(r.ok).toBe(true);
   });
 
@@ -24,7 +26,10 @@ describe('parseInsightOutput', () => {
   });
 
   it('rejects duplicate priorities', () => {
-    const dup = { ...validAiOutput, action_items: validAiOutput.action_items.map((a) => ({ ...a, priority: 1 })) };
+    const dup = {
+      ...validAiOutput,
+      action_items: validAiOutput.action_items.map((a) => ({ ...a, priority: 1 })),
+    };
     expect(parseInsightOutput(dup).ok).toBe(false);
   });
 
@@ -76,7 +81,16 @@ describe('parseInsightOutput', () => {
     const grounded = {
       ...validAiOutput,
       action_items: validAiOutput.action_items.map((a, i) =>
-        i === 0 ? { ...a, supporting_metrics: ['Clicks: 1,240 (-17.3%)', 'Lab LCP: 6.2 s', '"teeth whitening pune": position 11.4'] } : a,
+        i === 0
+          ? {
+              ...a,
+              supporting_metrics: [
+                'Clicks: 1,240 (-17.3%)',
+                'Lab LCP: 6.2 s',
+                '"teeth whitening pune": position 11.4',
+              ],
+            }
+          : a,
       ),
     };
     expect(parseInsightOutput(grounded, { source: s }).ok).toBe(true);
@@ -86,7 +100,9 @@ describe('parseInsightOutput', () => {
 describe('findUngroundedNumbers', () => {
   it('accepts exact, rounded and ms->seconds conversions; flags invented numbers', () => {
     const s = sampleSummary();
-    expect(findUngroundedNumbers(['48,200 impressions', 'Position 14.2', 'CTR 1.6%'], s)).toEqual([]);
+    expect(findUngroundedNumbers(['48,200 impressions', 'Position 14.2', 'CTR 1.6%'], s)).toEqual(
+      [],
+    );
     expect(findUngroundedNumbers(['Sessions: 5,401'], s)).toEqual([]); // within 1%
     expect(findUngroundedNumbers(['Sessions: 77,777'], s)).toEqual([77777]);
   });

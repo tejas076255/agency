@@ -17,7 +17,9 @@ beforeAll(async () => {
   env = t.env;
   dispose = t.dispose;
   const run = (sql: string) => env.DB.prepare(sql).run();
-  await run(`INSERT INTO agencies (id,name,brand_color,plan,created_at) VALUES ('A','A','#000000','free',0),('B','B','#000000','free',0)`);
+  await run(
+    `INSERT INTO agencies (id,name,brand_color,plan,created_at) VALUES ('A','A','#000000','free',0),('B','B','#000000','free',0)`,
+  );
   await run(`INSERT INTO users (id,agency_id,email,name,role,google_sub,created_at) VALUES
     ('ownerA','A','a@x.com','Owner A','owner','sa',0),
     ('memberA','A','m@x.com','Member A','member','sm',0),
@@ -70,9 +72,14 @@ describe('audit logs', () => {
       agencyId: 'A',
       userId: 'ownerA',
       action: 'agency.update',
-      metadata: { refresh_token: '1//abcdefghijklmnop', note: 'key=AIzaSyFAKE0000000000000000000000000000' },
+      metadata: {
+        refresh_token: '1//abcdefghijklmnop',
+        note: 'key=AIzaSyFAKE0000000000000000000000000000',
+      },
     });
-    const row = await env.DB.prepare(`SELECT metadata_json AS m FROM audit_logs WHERE action='agency.update'`).first<{ m: string }>();
+    const row = await env.DB.prepare(
+      `SELECT metadata_json AS m FROM audit_logs WHERE action='agency.update'`,
+    ).first<{ m: string }>();
     expect(row?.m).not.toContain('1//abcdefghijklmnop');
     expect(row?.m).not.toContain('AIzaSyFAKE00');
   });
@@ -94,10 +101,18 @@ describe('audit logs', () => {
 describe('API usage tracking', () => {
   it('maps URLs to API names', () => {
     expect(apiNameFromUrl('https://www.googleapis.com/webmasters/v3/sites')).toBe('gsc');
-    expect(apiNameFromUrl('https://analyticsdata.googleapis.com/v1beta/properties/1:runReport')).toBe('ga4');
-    expect(apiNameFromUrl('https://analyticsadmin.googleapis.com/v1beta/accountSummaries')).toBe('ga4_admin');
-    expect(apiNameFromUrl('https://www.googleapis.com/pagespeedonline/v5/runPagespeed')).toBe('pagespeed');
-    expect(apiNameFromUrl('https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send')).toBe('gmail');
+    expect(
+      apiNameFromUrl('https://analyticsdata.googleapis.com/v1beta/properties/1:runReport'),
+    ).toBe('ga4');
+    expect(apiNameFromUrl('https://analyticsadmin.googleapis.com/v1beta/accountSummaries')).toBe(
+      'ga4_admin',
+    );
+    expect(apiNameFromUrl('https://www.googleapis.com/pagespeedonline/v5/runPagespeed')).toBe(
+      'pagespeed',
+    );
+    expect(
+      apiNameFromUrl('https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send'),
+    ).toBe('gmail');
   });
 
   it('accumulates counters per agency per day and keeps agencies separate', async () => {

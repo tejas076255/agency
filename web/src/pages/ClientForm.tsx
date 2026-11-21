@@ -1,127 +1,150 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Card, Field, inputClass, Spinner } from '../components/ui';
+import { useConfirm } from '../components/ConfirmDialog';
+import { Skeleton } from '../components/Skeleton';
+import { Alert, Button, Card, Field, inputClass } from '../components/ui';
 import { api } from '../lib/api';
 import type { ClientDetail } from '../lib/types';
+
+// Same rules as the server (src/routes/clients.ts); the server validates again.
+const schema = z.object({
+  name: z.string().trim().min(2, 'At least 2 characters').max(100),
+  websiteUrl: z
+    .string()
+    .trim()
+    .url('Enter a full URL like https://example.com')
+    .refine((u) => /^https?:\/\//i.test(u), 'URL must start with http:// or https://'),
+  contactEmail: z.string().trim().email('Enter a valid email'),
+  autoSendReport: z.boolean(),
+});
+type FormValues = z.infer<typeof schema>;
 
 /** Add a new client (/clients/new) or edit one (/clients/:id/edit). */
 export function ClientFormPage() {
   const { id } = useParams();
   const editing = Boolean(id);
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(editing);
-  const [form, setForm] = useState({
-    name: '',
-    websiteUrl: 'https://',
-    contactEmail: '',
-    autoSendReport: false,
-  });
-  const [saving, setSaving] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    getValues,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: '', websiteUrl: 'https://', contactEmail: '', autoSendReport: false },
+  });
 
   useEffect(() => {
     if (!id) return;
     api<ClientDetail>(`/api/clients/${id}`)
       .then((d) =>
-        setForm({
+        reset({
           name: d.client.name,
           websiteUrl: d.client.websiteUrl,
           contactEmail: d.client.contactEmail,
           autoSendReport: d.client.autoSendReport,
         }),
       )
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => setServerError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, reset]);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  async function onSubmit(values: FormValues) {
+    setServerError(null);
     try {
       if (editing) {
-        await api(`/api/clients/${id}`, { method: 'PUT', body: form });
+        await api(`/api/clients/${id}`, { method: 'PUT', body: values });
         navigate(`/clients/${id}`);
       } else {
         const res = await api<{ client: { id: string } }>('/api/clients', {
           method: 'POST',
-          body: form,
+          body: values,
         });
-        navigate(`/clients/${res.client.id}?new=1`);
+        navigate(`/clients/${res.client.id}`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save');
-    } finally {
-      setSaving(false);
+      setServerError(err instanceof Error ? err.message : 'Could not save');
     }
   }
 
   async function remove() {
-    if (
-      !confirm(
-        `Delete ${form.name}? This removes all health checks, insights and reports for this client.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `Delete ${getValues('name')}?`,
+      message:
+        'This removes all health checks, insights and reports for this client and disconnects their Google account. This cannot be undone.',
+      confirmLabel: 'Delete client',
+      danger: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await api(`/api/clients/${id}`, { method: 'DELETE' });
-      navigate('/dashboard');
+      navigate('/clients');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete');
+      setServerError(err instanceof Error ? err.message : 'Could not delete');
       setDeleting(false);
     }
   }
 
-  if (loading) return <Spinner />;
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({
-      ...f,
-      [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value,
-    }));
+  if (loading) {
+    return (
+      <div className="max-w-xl space-y-4">
+        <Skeleton className="h-8 w-1/3" />
+        <Skeleton className="h-80 rounded-xl" />
+      </div>
+    );
+  }
+
+  const err = (k: keyof FormValues) => errors[k]?.message;
 
   return (
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-bold">{editing ? 'Edit client' : 'Add client'}</h1>
       <Card>
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="Client / business name">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <Field label="Client / business name" error={err('name')}>
             <input
               className={inputClass}
-              value={form.name}
-              onChange={set('name')}
-              required
-              minLength={2}
-              maxLength={100}
+              {...register('name')}
               autoFocus
+              aria-invalid={Boolean(err('name'))}
             />
           </Field>
-          <Field label="Website URL" hint="The page PageSpeed will test, usually the home page.">
+          <Field
+            label="Website URL"
+            hint="The page PageSpeed will test, usually the home page."
+            error={err('websiteUrl')}
+          >
             <input
               className={inputClass}
               type="url"
-              value={form.websiteUrl}
-              onChange={set('websiteUrl')}
-              required
+              {...register('websiteUrl')}
+              aria-invalid={Boolean(err('websiteUrl'))}
             />
           </Field>
-          <Field label="Client's email" hint="Monthly reports are emailed here.">
+          <Field
+            label="Client's email"
+            hint="Monthly reports are emailed here."
+            error={err('contactEmail')}
+          >
             <input
               className={inputClass}
               type="email"
-              value={form.contactEmail}
-              onChange={set('contactEmail')}
-              required
+              {...register('contactEmail')}
+              aria-invalid={Boolean(err('contactEmail'))}
             />
           </Field>
           <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4"
-              checked={form.autoSendReport}
-              onChange={set('autoSendReport')}
-            />
+            <input type="checkbox" className="mt-1 h-4 w-4" {...register('autoSendReport')} />
             <span>
               <span className="block text-sm font-medium">Auto-send monthly report</span>
               <span className="block text-xs text-slate-500">
@@ -130,9 +153,9 @@ export function ClientFormPage() {
               </span>
             </span>
           </label>
-          {error && <Alert>{error}</Alert>}
+          {serverError && <Alert>{serverError}</Alert>}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" loading={saving}>
+            <Button type="submit" loading={isSubmitting}>
               {editing ? 'Save changes' : 'Add client'}
             </Button>
             <Button type="button" variant="secondary" onClick={() => navigate(-1)}>

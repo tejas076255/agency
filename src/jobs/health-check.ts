@@ -134,7 +134,11 @@ export async function runHealthCheck(
         { hinglish: true },
       );
       if (source === 'fallback') {
-        errors.ai = `AI unavailable, used rule-based recommendations (${fallbackReason ?? 'unknown reason'})`.slice(0, 300);
+        errors.ai =
+          `AI unavailable, used rule-based recommendations (${fallbackReason ?? 'unknown reason'})`.slice(
+            0,
+            300,
+          );
       }
       const insightId = crypto.randomUUID();
       await db.batch([

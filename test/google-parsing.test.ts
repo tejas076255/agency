@@ -162,7 +162,10 @@ describe('PageSpeed lab vs field data', () => {
   const lab = {
     lighthouseResult: {
       categories: { performance: { score: 0.9 } },
-      audits: { 'largest-contentful-paint': { numericValue: 1800 }, 'first-contentful-paint': { numericValue: 900 } },
+      audits: {
+        'largest-contentful-paint': { numericValue: 1800 },
+        'first-contentful-paint': { numericValue: 900 },
+      },
     },
   };
   it('passes Core Web Vitals when LCP, CLS and INP are all good (75th percentile)', () => {

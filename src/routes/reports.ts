@@ -59,7 +59,10 @@ reportRoutes.get('/', async (c) => {
       createdAt: reports.createdAt,
     })
     .from(reports)
-    .innerJoin(clients, and(eq(clients.id, reports.clientId), eq(clients.agencyId, reports.agencyId)))
+    .innerJoin(
+      clients,
+      and(eq(clients.id, reports.clientId), eq(clients.agencyId, reports.agencyId)),
+    )
     .where(and(eq(reports.agencyId, c.get('agencyId')), clientScope(c)))
     .orderBy(desc(reports.createdAt))
     .limit(100);

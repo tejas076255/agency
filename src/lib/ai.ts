@@ -178,7 +178,7 @@ Return ONLY a JSON object with:
     "description": 1-2 sentences on what exactly to do,
     "why": the data-backed reason,
     "expected_impact": realistic, non-guaranteed outcome,
-    "supporting_metrics": 1-4 short strings quoting exact numbers from the JSON (e.g. "\\"seo pune\\": position 11.4, 820 impressions") }.
+    "supporting_metrics": 1-4 short, human-readable strings quoting exact numbers from the JSON, written in plain words (NOT JSON field names), e.g. "\\"seo pune\\": position 11.4, 820 impressions" or "Mobile speed score: 38/100". Never include empty values like [] }.
 Prefer quick wins (keywords at positions 8-20), fixing pages that lost clicks, and the top speed fixes.`;
 
 const HINGLISH_RULE = `
@@ -210,7 +210,12 @@ export async function generateInsights(
   const parseOpts = { requireHinglish: hinglish, source: summary };
   const fallback = (reason: string): GeneratedInsights => {
     log.warn('Using rule-based insights fallback', undefined, { reason });
-    return { data: buildFallbackInsights(summary), model: 'rule-based-fallback', source: 'fallback', fallbackReason: reason };
+    return {
+      data: buildFallbackInsights(summary),
+      model: 'rule-based-fallback',
+      source: 'fallback',
+      fallbackReason: reason,
+    };
   };
 
   let first: { output: unknown; model: string };

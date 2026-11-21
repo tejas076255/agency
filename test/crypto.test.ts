@@ -17,7 +17,11 @@ async function encryptV1(plaintext: string, base64Key: string) {
   const raw = Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
   const k = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, new TextEncoder().encode(plaintext));
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    k,
+    new TextEncoder().encode(plaintext),
+  );
   return `v1.${bytesToBase64(iv)}.${bytesToBase64(new Uint8Array(ct))}`;
 }
 
@@ -44,7 +48,10 @@ describe('encryption key versioning / rotation', () => {
   });
 
   it('fails for an unknown key id (old key removed too early)', async () => {
-    const written = await encryptSecret('x', keyRingFromEnv({ TOKEN_ENCRYPTION_KEY: key(), TOKEN_ENCRYPTION_KEY_ID: 'k1' }));
+    const written = await encryptSecret(
+      'x',
+      keyRingFromEnv({ TOKEN_ENCRYPTION_KEY: key(), TOKEN_ENCRYPTION_KEY_ID: 'k1' }),
+    );
     const ring = keyRingFromEnv({ TOKEN_ENCRYPTION_KEY: key(), TOKEN_ENCRYPTION_KEY_ID: 'k2' });
     await expect(decryptSecret(written, ring)).rejects.toThrow(/Unknown encryption key id "k1"/);
   });
@@ -53,13 +60,19 @@ describe('encryption key versioning / rotation', () => {
     const k1 = key();
     const legacy = await encryptV1('legacy-secret', k1);
     expect(await decryptSecret(legacy, k1)).toBe('legacy-secret');
-    const rotated = keyRingFromEnv({ TOKEN_ENCRYPTION_KEY: key(), TOKEN_ENCRYPTION_KEY_ID: 'k2', TOKEN_ENCRYPTION_KEY_PREVIOUS: `k1:${k1}` });
+    const rotated = keyRingFromEnv({
+      TOKEN_ENCRYPTION_KEY: key(),
+      TOKEN_ENCRYPTION_KEY_ID: 'k2',
+      TOKEN_ENCRYPTION_KEY_PREVIOUS: `k1:${k1}`,
+    });
     expect(await decryptSecret(legacy, rotated)).toBe('legacy-secret');
     expect(needsReencryption(legacy, rotated)).toBe(true);
   });
 
   it('rejects a malformed previous-key setting', () => {
-    expect(() => keyRingFromEnv({ TOKEN_ENCRYPTION_KEY: key(), TOKEN_ENCRYPTION_KEY_PREVIOUS: 'no-colon' })).toThrow();
+    expect(() =>
+      keyRingFromEnv({ TOKEN_ENCRYPTION_KEY: key(), TOKEN_ENCRYPTION_KEY_PREVIOUS: 'no-colon' }),
+    ).toThrow();
   });
 });
 

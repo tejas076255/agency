@@ -188,7 +188,9 @@ describe('tenant isolation: agency A vs agency B', () => {
         })
       ).status,
     ).toBe(404);
-    expect((await req('user-a', '/api/reports/report-b/refresh-pdf', { method: 'POST' })).status).toBe(404);
+    expect(
+      (await req('user-a', '/api/reports/report-b/refresh-pdf', { method: 'POST' })).status,
+    ).toBe(404);
   });
 
   it('report history only lists own agency reports', async () => {

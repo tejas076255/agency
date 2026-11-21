@@ -109,7 +109,14 @@ export function computeHealthScore(input: ScoreInput): ScoreResult {
     ? category(
         [
           // Organic sessions trend; if the organic report wasn't available use all sessions.
-          part(trendFraction(t.organicSessionsChangePct === undefined ? t.sessionsChangePct : t.organicSessionsChangePct), 15),
+          part(
+            trendFraction(
+              t.organicSessionsChangePct === undefined
+                ? t.sessionsChangePct
+                : t.organicSessionsChangePct,
+            ),
+            15,
+          ),
           part(linear(t.engagementRatePct, 0, 60), 10),
           part(trendFraction(t.keyEventsChangePct), 5),
         ],
@@ -129,8 +136,13 @@ export function computeHealthScore(input: ScoreInput): ScoreResult {
       )
     : null;
 
-  const available = [input.sources.gsc, input.sources.ga4, input.sources.pagespeed].filter(Boolean).length;
-  const completeness: SectionScore = { points: r1((available / 3) * WEIGHTS.completeness), max: WEIGHTS.completeness };
+  const available = [input.sources.gsc, input.sources.ga4, input.sources.pagespeed].filter(
+    Boolean,
+  ).length;
+  const completeness: SectionScore = {
+    points: r1((available / 3) * WEIGHTS.completeness),
+    max: WEIGHTS.completeness,
+  };
 
   const breakdown = { search, traffic, performance, completeness };
   const dataSections = [search, traffic, performance].filter((x): x is SectionScore => x !== null);

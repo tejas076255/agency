@@ -3,7 +3,10 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 
 const navItems = [
-  { to: '/dashboard', label: 'Clients' },
+  // Only implemented (Phase 1) sections are shown; Local SEO, Ads, YouTube appear in later phases.
+  { to: '/dashboard', label: 'Overview' },
+  { to: '/clients', label: 'Clients' },
+  { to: '/reports', label: 'Reports' },
   { to: '/jobs', label: 'Job logs' },
   { to: '/settings', label: 'Settings' },
 ];

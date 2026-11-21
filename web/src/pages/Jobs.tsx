@@ -4,7 +4,98 @@ import { StatusBadge } from '../components/badges';
 import { Alert, Button, Card, Spinner } from '../components/ui';
 import { api } from '../lib/api';
 import { formatDateTime } from '../lib/format';
-import type { ClientListItem, JobRun } from '../lib/types';
+import type { ClientListItem, JobRun, UsageRow } from '../lib/types';
+
+const API_LABEL: Record<string, string> = {
+  gsc: 'Search Console',
+  ga4: 'GA4 Data',
+  ga4_admin: 'GA4 Admin',
+  pagespeed: 'PageSpeed',
+  slides: 'Slides',
+  drive: 'Drive',
+  gmail: 'Gmail',
+  oauth: 'Google OAuth',
+  workers_ai: 'Workers AI',
+  other: 'Other',
+};
+
+/** API calls per service over the last 7 days (quota/cost monitoring). */
+function UsageCard() {
+  const [rows, setRows] = useState<UsageRow[] | null>(null);
+  useEffect(() => {
+    api<{ usage: UsageRow[] }>('/api/agency/usage')
+      .then((r) => setRows(r.usage))
+      .catch(() => setRows([]));
+  }, []);
+  if (!rows) return null;
+  const totals = new Map<string, { calls: number; errors: number; quotaErrors: number }>();
+  for (const r of rows) {
+    const t = totals.get(r.api) ?? { calls: 0, errors: 0, quotaErrors: 0 };
+    t.calls += r.calls;
+    t.errors += r.errors;
+    t.quotaErrors += r.quotaErrors;
+    totals.set(r.api, t);
+  }
+  const quotaHit = [...totals.values()].some((t) => t.quotaErrors > 0);
+  return (
+    <Card>
+      <h2 className="font-semibold">API usage (last 7 days)</h2>
+      <p className="text-sm text-slate-500">
+        Counts every call to Google APIs and Workers AI made for your agency.
+      </p>
+      {quotaHit && (
+        <div className="mt-3">
+          <Alert>
+            ⚠ Some calls hit a quota limit (HTTP 429). Jobs retry automatically; if this keeps
+            happening, reduce manual runs or request a higher quota in Google Cloud.
+          </Alert>
+        </div>
+      )}
+      {totals.size === 0 ? (
+        <p className="py-4 text-sm text-slate-400">No API calls recorded yet.</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th scope="col" className="py-2 font-medium">
+                  API
+                </th>
+                <th scope="col" className="py-2 text-right font-medium">
+                  Calls
+                </th>
+                <th scope="col" className="py-2 text-right font-medium">
+                  Errors
+                </th>
+                <th scope="col" className="py-2 text-right font-medium">
+                  Quota errors
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...totals.entries()].map(([api, t]) => (
+                <tr key={api} className="border-b border-slate-100 last:border-0">
+                  <td className="py-2">{API_LABEL[api] ?? api}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {t.calls.toLocaleString('en-IN')}
+                  </td>
+                  <td className="py-2 text-right tabular-nums">
+                    {t.errors.toLocaleString('en-IN')}
+                  </td>
+                  <td
+                    className={`py-2 text-right tabular-nums ${t.quotaErrors ? 'text-red-700' : ''}`}
+                  >
+                    {t.quotaErrors}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export function JobsPage() {
   const [jobs, setJobs] = useState<JobRun[] | null>(null);
@@ -88,6 +179,8 @@ export function JobsPage() {
           </ul>
         </Card>
       )}
+
+      <UsageCard />
 
       <Card className="p-0">
         <h2 className="px-5 pt-5 font-semibold">Recent jobs</h2>

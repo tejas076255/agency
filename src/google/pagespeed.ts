@@ -59,7 +59,10 @@ type CruxBlock = { metrics?: Record<string, { percentile?: number; category?: st
 export const CWV_GOOD = { lcpMs: 2500, inpMs: 200, cls: 0.1 } as const;
 
 /** Pure: Chrome UX Report block -> field metrics + CWV assessment. */
-export function parseFieldData(block: CruxBlock | undefined, source: 'url' | 'origin'): FieldData | null {
+export function parseFieldData(
+  block: CruxBlock | undefined,
+  source: 'url' | 'origin',
+): FieldData | null {
   const m = block?.metrics;
   if (!m || Object.keys(m).length === 0) return null;
   const lcp = m.LARGEST_CONTENTFUL_PAINT_MS?.percentile;
@@ -68,7 +71,8 @@ export function parseFieldData(block: CruxBlock | undefined, source: 'url' | 'or
   const cls = clsRaw === undefined ? undefined : clsRaw / 100;
   let cwvPassed: boolean | null = null;
   if (lcp !== undefined && cls !== undefined) {
-    cwvPassed = lcp <= CWV_GOOD.lcpMs && cls <= CWV_GOOD.cls && (inp === undefined || inp <= CWV_GOOD.inpMs);
+    cwvPassed =
+      lcp <= CWV_GOOD.lcpMs && cls <= CWV_GOOD.cls && (inp === undefined || inp <= CWV_GOOD.inpMs);
   }
   return {
     source,

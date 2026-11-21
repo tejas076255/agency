@@ -79,7 +79,11 @@ agencyRoutes.put('/', requireAgency, requireOwner, async (c) => {
     .where(eq(agencies.id, c.get('agencyId')))
     .returning();
   if (!agency) return c.json({ error: 'Agency not found' }, 404);
-  await auditRequest(c, 'agency.update', { targetType: 'agency', targetId: agency.id, metadata: input });
+  await auditRequest(c, 'agency.update', {
+    targetType: 'agency',
+    targetId: agency.id,
+    metadata: input,
+  });
   return c.json({ agency: agencyDto(agency) });
 });
 
@@ -180,8 +184,14 @@ agencyRoutes.put('/report-settings', requireAgency, requireOwner, async (c) => {
   await getDb(c.env)
     .insert(reportSettings)
     .values({ agencyId, ...input, updatedAt: Date.now() })
-    .onConflictDoUpdate({ target: reportSettings.agencyId, set: { ...input, updatedAt: Date.now() } });
-  await auditRequest(c, 'agency.report_settings_update', { targetType: 'agency', targetId: agencyId });
+    .onConflictDoUpdate({
+      target: reportSettings.agencyId,
+      set: { ...input, updatedAt: Date.now() },
+    });
+  await auditRequest(c, 'agency.report_settings_update', {
+    targetType: 'agency',
+    targetId: agencyId,
+  });
   return c.json({ settings: input });
 });
 

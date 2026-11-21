@@ -27,7 +27,9 @@ export function redact(value: unknown, depth = 0): unknown {
     return {
       name: value.name,
       message: redactString(value.message),
-      ...(value.stack ? { stack: redactString(value.stack.split('\n').slice(0, 6).join('\n')) } : {}),
+      ...(value.stack
+        ? { stack: redactString(value.stack.split('\n').slice(0, 6).join('\n')) }
+        : {}),
     };
   }
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
@@ -48,9 +50,17 @@ export const log = {
     console.log(redactString(message), ...(ctx ? [redact(ctx)] : []));
   },
   warn(message: string, err?: unknown, ctx?: Ctx) {
-    console.warn(redactString(message), ...(err !== undefined ? [redact(err)] : []), ...(ctx ? [redact(ctx)] : []));
+    console.warn(
+      redactString(message),
+      ...(err !== undefined ? [redact(err)] : []),
+      ...(ctx ? [redact(ctx)] : []),
+    );
   },
   error(message: string, err?: unknown, ctx?: Ctx) {
-    console.error(redactString(message), ...(err !== undefined ? [redact(err)] : []), ...(ctx ? [redact(ctx)] : []));
+    console.error(
+      redactString(message),
+      ...(err !== undefined ? [redact(err)] : []),
+      ...(ctx ? [redact(ctx)] : []),
+    );
   },
 };

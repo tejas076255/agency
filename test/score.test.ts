@@ -23,8 +23,20 @@ describe('trendFraction', () => {
 describe('computeHealthScore v2 (35 / 30 / 25 / 10)', () => {
   it('a perfect site scores 100', () => {
     const r = computeHealthScore({
-      search: { hasData: true, clicksChangePct: 60, impressionsChangePct: 60, avgPosition: 2, ctrPct: 8 },
-      traffic: { hasData: true, organicSessionsChangePct: 50, sessionsChangePct: 50, engagementRatePct: 70, keyEventsChangePct: 50 },
+      search: {
+        hasData: true,
+        clicksChangePct: 60,
+        impressionsChangePct: 60,
+        avgPosition: 2,
+        ctrPct: 8,
+      },
+      traffic: {
+        hasData: true,
+        organicSessionsChangePct: 50,
+        sessionsChangePct: 50,
+        engagementRatePct: 70,
+        keyEventsChangePct: 50,
+      },
       performance: { mobile: 100, desktop: 100, cwvPassed: true },
       sources: all,
     });
@@ -40,8 +52,20 @@ describe('computeHealthScore v2 (35 / 30 / 25 / 10)', () => {
 
   it('computes the documented mixed example exactly (docs/HEALTH_SCORE.md)', () => {
     const r = computeHealthScore({
-      search: { hasData: true, clicksChangePct: 0, impressionsChangePct: -25, avgPosition: 16.5, ctrPct: 2.5 },
-      traffic: { hasData: true, organicSessionsChangePct: -25, sessionsChangePct: 10, engagementRatePct: 30, keyEventsChangePct: 0 },
+      search: {
+        hasData: true,
+        clicksChangePct: 0,
+        impressionsChangePct: -25,
+        avgPosition: 16.5,
+        ctrPct: 2.5,
+      },
+      traffic: {
+        hasData: true,
+        organicSessionsChangePct: -25,
+        sessionsChangePct: 10,
+        engagementRatePct: 30,
+        keyEventsChangePct: 0,
+      },
       performance: { mobile: 50, desktop: 80, cwvPassed: false },
       sources: all,
     });
@@ -75,7 +99,13 @@ describe('computeHealthScore v2 (35 / 30 / 25 / 10)', () => {
 
   it('clamps out-of-range values instead of breaking the scale', () => {
     const r = computeHealthScore({
-      search: { hasData: true, clicksChangePct: 0, impressionsChangePct: 0, avgPosition: -5, ctrPct: 400 },
+      search: {
+        hasData: true,
+        clicksChangePct: 0,
+        impressionsChangePct: 0,
+        avgPosition: -5,
+        ctrPct: 400,
+      },
       performance: { mobile: 150, desktop: -20, cwvPassed: null },
       sources: { gsc: true, ga4: false, pagespeed: true },
     });
@@ -89,7 +119,13 @@ describe('computeHealthScore v2 (35 / 30 / 25 / 10)', () => {
 
   it('uses all sessions when the organic report was not available (undefined), neutral when null', () => {
     const base: ScoreInput = {
-      traffic: { hasData: true, organicSessionsChangePct: undefined, sessionsChangePct: 50, engagementRatePct: 60, keyEventsChangePct: 50 },
+      traffic: {
+        hasData: true,
+        organicSessionsChangePct: undefined,
+        sessionsChangePct: 50,
+        engagementRatePct: 60,
+        keyEventsChangePct: 50,
+      },
       sources: { gsc: false, ga4: true, pagespeed: false },
     };
     expect(computeHealthScore(base).breakdown.traffic).toEqual({ points: 30, max: 30 });
@@ -102,7 +138,13 @@ describe('computeHealthScore v2 (35 / 30 / 25 / 10)', () => {
 
   it('returns null when no data category is available', () => {
     const r = computeHealthScore({
-      search: { hasData: false, clicksChangePct: null, impressionsChangePct: null, avgPosition: null, ctrPct: null },
+      search: {
+        hasData: false,
+        clicksChangePct: null,
+        impressionsChangePct: null,
+        avgPosition: null,
+        ctrPct: null,
+      },
       sources: { gsc: true, ga4: false, pagespeed: false },
     });
     expect(r.score).toBeNull();
@@ -110,8 +152,20 @@ describe('computeHealthScore v2 (35 / 30 / 25 / 10)', () => {
 
   it('the worst possible site with all sources connected scores 10 (completeness only)', () => {
     const r = computeHealthScore({
-      search: { hasData: true, clicksChangePct: -100, impressionsChangePct: -100, avgPosition: 90, ctrPct: 0 },
-      traffic: { hasData: true, organicSessionsChangePct: -100, sessionsChangePct: -100, engagementRatePct: 0, keyEventsChangePct: -100 },
+      search: {
+        hasData: true,
+        clicksChangePct: -100,
+        impressionsChangePct: -100,
+        avgPosition: 90,
+        ctrPct: 0,
+      },
+      traffic: {
+        hasData: true,
+        organicSessionsChangePct: -100,
+        sessionsChangePct: -100,
+        engagementRatePct: 0,
+        keyEventsChangePct: -100,
+      },
       performance: { mobile: 0, desktop: 0, cwvPassed: false },
       sources: all,
     });

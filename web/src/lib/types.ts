@@ -14,9 +14,20 @@ export type ClientListItem = {
   sourcesSelected: boolean;
 };
 
+export type FieldData = {
+  source: 'url' | 'origin';
+  lcpMs: number | null;
+  cls: number | null;
+  inpMs: number | null;
+  cwvPassed: boolean | null;
+};
+
 export type SpeedResult = {
   strategy: 'mobile' | 'desktop';
   score: number;
+  /** Present on checks saved after the lab/field split. */
+  lab?: { lcpMs: number | null; cls: number | null; tbtMs: number | null; fcpMs: number | null };
+  field?: FieldData | null;
   lcpMs: number | null;
   cls: number | null;
   inpMs: number | null;
@@ -36,6 +47,7 @@ export type GscSummary = {
     ctr: number;
     position: number;
   }[];
+  topPages?: { page: string; clicks: number; impressions: number; ctr: number; position: number }[];
   quickWins: { query: string; impressions: number; clicks: number; position: number }[];
   droppingPages: { page: string; clicksNow: number; clicksBefore: number; change: number }[];
   dailyClicks: { date: string; clicks: number }[];
@@ -43,17 +55,43 @@ export type GscSummary = {
 
 export type Ga4Summary = {
   totals: {
-    current: { sessions: number; users: number; keyEvents: number; engagementRate: number };
+    current: {
+      sessions: number;
+      users: number;
+      keyEvents: number;
+      engagementRate: number;
+      newUsers?: number;
+    };
   };
   sessionsChangePct: number | null;
   usersChangePct: number | null;
+  newUsersChangePct?: number | null;
   keyEventsChangePct: number | null;
+  organicSessions?: { current: number; previous: number; changePct: number | null } | null;
   topChannels: { channel: string; sessions: number }[];
   topLandingPages: { page: string; sessions: number; keyEvents: number }[];
   dailySessions: { date: string; sessions: number }[];
 };
 
 export type Section = { points: number; max: number } | null;
+
+/** v2 keys (search/traffic/performance/completeness) or v1 keys (seo/traffic/speed). */
+export type ScoreBreakdown = Partial<
+  Record<'search' | 'traffic' | 'performance' | 'completeness' | 'seo' | 'speed', Section>
+>;
+
+export type ActionItem = {
+  id: string;
+  priority: number;
+  title: string;
+  description: string | null;
+  why: string;
+  expectedImpact: string;
+  supportingMetrics: string[];
+  done: boolean;
+};
+
+export type ReportStatus = 'generating' | 'ready' | 'sent' | 'failed';
 
 export type ClientDetail = {
   client: {
@@ -77,9 +115,10 @@ export type ClientDetail = {
     id: string;
     runAt: number;
     score: number | null;
+    formulaVersion: number;
     status: 'ok' | 'partial' | 'failed';
     errors: Record<string, string>;
-    breakdown: { seo: Section; traffic: Section; speed: Section } | null;
+    breakdown: ScoreBreakdown | null;
     gsc: GscSummary | null;
     ga4: Ga4Summary | null;
     pagespeed: { mobile: SpeedResult | null; desktop: SpeedResult | null } | null;
@@ -96,19 +135,12 @@ export type ClientDetail = {
     summaryHinglish: string | null;
     modelUsed: string;
     createdAt: number;
-    actionItems: {
-      id: string;
-      priority: number;
-      title: string;
-      why: string;
-      expectedImpact: string;
-      done: boolean;
-    }[];
+    actionItems: ActionItem[];
   } | null;
   reports: {
     id: string;
     month: string;
-    status: 'generating' | 'ready' | 'sent' | 'failed';
+    status: ReportStatus;
     error: string | null;
     shareUrl: string;
     sentAt: number | null;
@@ -116,6 +148,19 @@ export type ClientDetail = {
     slidesFileId: string | null;
   }[];
   pending: { healthCheck: boolean; report: boolean };
+};
+
+export type ReportListItem = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  month: string;
+  status: ReportStatus;
+  error: string | null;
+  shareUrl: string;
+  slidesFileId: string | null;
+  sentAt: number | null;
+  createdAt: number;
 };
 
 export type GoogleOptions = {
@@ -136,4 +181,30 @@ export type JobRun = {
   finishedAt: number | null;
   clientId: string;
   clientName: string;
+};
+
+export type UsageRow = {
+  api: string;
+  day: string;
+  calls: number;
+  errors: number;
+  quotaErrors: number;
+};
+
+export type AuditLogRow = {
+  id: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: number;
+  userName: string | null;
+  userEmail: string | null;
+};
+
+export type ReportSettings = {
+  emailSubject: string;
+  emailMessage: string;
+  ccAgency: boolean;
+  includeHinglish: boolean;
 };

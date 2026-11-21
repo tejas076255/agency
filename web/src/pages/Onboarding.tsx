@@ -1,33 +1,37 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { LogoUploader } from '../components/LogoUploader';
 import { Alert, Button, Card, Field, inputClass } from '../components/ui';
 import { api, type Agency } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
+const schema = z.object({
+  name: z.string().trim().min(2, 'At least 2 characters').max(80),
+  brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex color like #4f46e5'),
+});
+type Values = z.infer<typeof schema>;
+
 export function OnboardingPage() {
   const { me, refresh } = useAuth();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [color, setColor] = useState('#4f46e5');
   const [agency, setAgency] = useState<Agency | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const { register, handleSubmit, watch, formState } = useForm<Values>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: '', brandColor: '#4f46e5' },
+  });
+  const color = watch('brandColor');
 
-  async function createAgency(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  async function onSubmit(values: Values) {
+    setServerError(null);
     try {
-      const res = await api<{ agency: Agency }>('/api/agency', {
-        method: 'POST',
-        body: { name, brandColor: color },
-      });
+      const res = await api<{ agency: Agency }>('/api/agency', { method: 'POST', body: values });
       setAgency(res.agency);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create agency');
-    } finally {
-      setSaving(false);
+      setServerError(err instanceof Error ? err.message : 'Could not create agency');
     }
   }
 
@@ -39,7 +43,7 @@ export function OnboardingPage() {
   return (
     <main
       className="flex min-h-screen items-center justify-center px-4 py-10"
-      style={{ ['--brand' as string]: color }}
+      style={{ ['--brand' as string]: /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#4f46e5' }}
     >
       <Card className="w-full max-w-md">
         <p className="text-sm text-slate-500">Welcome, {me?.user?.name}</p>
@@ -53,32 +57,27 @@ export function OnboardingPage() {
         </p>
 
         {!agency ? (
-          <form onSubmit={createAgency} className="mt-6 space-y-4">
-            <Field label="Agency name">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
+            <Field label="Agency name" error={formState.errors.name?.message}>
               <input
                 className={inputClass}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                {...register('name')}
                 placeholder="e.g. Growth Pixel Digital"
-                minLength={2}
-                maxLength={80}
-                required
                 autoFocus
               />
             </Field>
-            <Field label="Brand color">
+            <Field label="Brand color" error={formState.errors.brandColor?.message}>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
+                  {...register('brandColor')}
                   className="h-10 w-14 cursor-pointer rounded border border-slate-300"
                 />
                 <span className="font-mono text-sm text-slate-600">{color}</span>
               </div>
             </Field>
-            {error && <Alert>{error}</Alert>}
-            <Button type="submit" loading={saving} className="w-full">
+            {serverError && <Alert>{serverError}</Alert>}
+            <Button type="submit" loading={formState.isSubmitting} className="w-full">
               Continue
             </Button>
           </form>

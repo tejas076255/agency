@@ -56,7 +56,8 @@ export async function audit(env: Pick<Env, 'DB' | 'AUDIT_HASH_SALT'>, entry: Aud
         action: entry.action,
         targetType: entry.targetType ?? null,
         targetId: entry.targetId ?? null,
-        ipHash: entry.ip && env.AUDIT_HASH_SALT ? await hashIp(env.AUDIT_HASH_SALT, entry.ip) : null,
+        ipHash:
+          entry.ip && env.AUDIT_HASH_SALT ? await hashIp(env.AUDIT_HASH_SALT, entry.ip) : null,
         metadataJson: entry.metadata ? JSON.stringify(redact(entry.metadata)) : null,
         createdAt: Date.now(),
       });
@@ -69,7 +70,9 @@ export async function audit(env: Pick<Env, 'DB' | 'AUDIT_HASH_SALT'>, entry: Aud
 export function auditRequest(
   c: Context<AppEnv>,
   action: AuditAction,
-  extra: Omit<AuditEntry, 'action' | 'agencyId' | 'userId' | 'ip'> & { agencyId?: string | null } = {},
+  extra: Omit<AuditEntry, 'action' | 'agencyId' | 'userId' | 'ip'> & {
+    agencyId?: string | null;
+  } = {},
 ) {
   const user = c.get('user');
   return audit(c.env, {

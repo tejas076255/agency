@@ -258,7 +258,11 @@ clientRoutes.put('/:id', async (c) => {
     .set({ ...input, updatedAt: Date.now() })
     .where(clientScope(c, client.id))
     .returning();
-  await auditRequest(c, 'client.update', { targetType: 'client', targetId: client.id, metadata: input });
+  await auditRequest(c, 'client.update', {
+    targetType: 'client',
+    targetId: client.id,
+    metadata: input,
+  });
   return c.json({ client: row });
 });
 

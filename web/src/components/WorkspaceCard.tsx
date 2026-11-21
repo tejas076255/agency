@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formatDateTime } from '../lib/format';
+import { useConfirm } from './ConfirmDialog';
 import { Alert, Button, Card, Spinner } from './ui';
 
 type Workspace = {
@@ -21,6 +22,7 @@ export function WorkspaceCard({ isOwner }: { isOwner: boolean }) {
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState<Workspace | null>(null);
   const [busy, setBusy] = useState(false);
+  const confirmDialog = useConfirm();
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   const load = useCallback(
@@ -57,8 +59,13 @@ export function WorkspaceCard({ isOwner }: { isOwner: boolean }) {
   }
 
   async function disconnect() {
-    if (!confirm('Disconnect? Monthly reports cannot be created or emailed until you reconnect.'))
-      return;
+    const ok = await confirmDialog({
+      title: 'Disconnect the agency Google account?',
+      message: 'Monthly reports cannot be created or emailed until you reconnect.',
+      confirmLabel: 'Disconnect',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     await api('/api/agency/google', { method: 'DELETE' }).catch(() => undefined);
     await load();

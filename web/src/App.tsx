@@ -1,14 +1,18 @@
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { Layout } from './components/Layout';
-import { Alert, FullPageSpinner, Spinner } from './components/ui';
+import { DetailSkeleton } from './components/Skeleton';
+import { Alert, FullPageSpinner } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
-import { lazy, Suspense } from 'react';
 import { ClientFormPage } from './pages/ClientForm';
+import { ClientsPage } from './pages/Clients';
 import { DashboardPage } from './pages/Dashboard';
 import { JobsPage } from './pages/Jobs';
+import { PrivacyPage, TermsPage } from './pages/Legal';
 import { LoginPage } from './pages/Login';
 import { OnboardingPage } from './pages/Onboarding';
+import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
 
 // Charts (recharts) are heavy: load the client detail page only when it's opened.
@@ -55,46 +59,53 @@ export function App() {
     <AuthProvider>
       <BrowserRouter>
         <BrandColor>
-          <Routes>
-            <Route
-              path="/login"
-              element={
-                <Guard need="guest">
-                  <LoginPage />
-                </Guard>
-              }
-            />
-            <Route
-              path="/onboarding"
-              element={
-                <Guard need="onboarding">
-                  <OnboardingPage />
-                </Guard>
-              }
-            />
-            <Route
-              element={
-                <Guard need="agency">
-                  <Layout />
-                </Guard>
-              }
-            >
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/clients/new" element={<ClientFormPage />} />
+          <ConfirmProvider>
+            <Routes>
+              {/* Public pages (linked from the Google consent screen). */}
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
               <Route
-                path="/clients/:id"
+                path="/login"
                 element={
-                  <Suspense fallback={<Spinner />}>
-                    <ClientDetailPage />
-                  </Suspense>
+                  <Guard need="guest">
+                    <LoginPage />
+                  </Guard>
                 }
               />
-              <Route path="/clients/:id/edit" element={<ClientFormPage />} />
-              <Route path="/jobs" element={<JobsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+              <Route
+                path="/onboarding"
+                element={
+                  <Guard need="onboarding">
+                    <OnboardingPage />
+                  </Guard>
+                }
+              />
+              <Route
+                element={
+                  <Guard need="agency">
+                    <Layout />
+                  </Guard>
+                }
+              >
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/clients" element={<ClientsPage />} />
+                <Route path="/clients/new" element={<ClientFormPage />} />
+                <Route
+                  path="/clients/:id"
+                  element={
+                    <Suspense fallback={<DetailSkeleton />}>
+                      <ClientDetailPage />
+                    </Suspense>
+                  }
+                />
+                <Route path="/clients/:id/edit" element={<ClientFormPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/jobs" element={<JobsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </ConfirmProvider>
         </BrandColor>
       </BrowserRouter>
     </AuthProvider>

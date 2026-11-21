@@ -71,7 +71,10 @@ function importAesKey(base64Key: string): Promise<CryptoKey> {
  * Key ring for rotation: new data is always encrypted with `current`;
  * `previous` (optional) can still decrypt data written before a key rotation.
  */
-export type KeyRing = { current: { id: string; key: string }; previous?: { id: string; key: string } };
+export type KeyRing = {
+  current: { id: string; key: string };
+  previous?: { id: string; key: string };
+};
 
 const DEFAULT_KEY_ID = 'k1';
 

@@ -12,6 +12,13 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
 # 32 random bytes, base64 encoded. Used to encrypt Google refresh tokens (AES-GCM).
 # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 TOKEN_ENCRYPTION_KEY=
+# Id stored inside every ciphertext (change it when you rotate the key). Default: k1
+# TOKEN_ENCRYPTION_KEY_ID=k1
+# Only during key rotation: the OLD key as "<old id>:<old base64 key>" so old tokens still decrypt.
+# TOKEN_ENCRYPTION_KEY_PREVIOUS=k1:BASE64_OLD_KEY
+
+# Optional: random string used to hash IP addresses in audit logs. Without it, IPs are not stored.
+# AUDIT_HASH_SALT=
 
 # PageSpeed Insights API key (Google Cloud Console -> Credentials -> API key)
 PAGESPEED_API_KEY=

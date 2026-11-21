@@ -42,7 +42,9 @@ export function buildCompactSummary(
       impressions_change_pct: gsc.impressionsChangePct,
       avg_position: r1(gsc.totals.current.position),
       ctr_pct: r1(gsc.totals.current.ctr * 100),
-      top_queries: gsc.topQueries.slice(0, 5).map((q) => ({ q: q.query, clicks: q.clicks, pos: q.position })),
+      top_queries: gsc.topQueries
+        .slice(0, 5)
+        .map((q) => ({ q: q.query, clicks: q.clicks, pos: q.position })),
       top_pages: (gsc.topPages ?? []).slice(0, 3).map((p) => ({ page: p.page, clicks: p.clicks })),
       quick_wins: gsc.quickWins
         .slice(0, 5)
@@ -114,20 +116,26 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
       description: `Improve on-page content and add internal links for: ${top.map((q) => `"${q.q}"`).join(', ')}.`,
       why: 'These keywords already rank on page 2 (positions 8-20) and get impressions, so a small improvement can bring clicks.',
       expected_impact: 'May bring additional clicks if these keywords move into the top 5.',
-      supporting_metrics: top.map((q) => `"${q.q}": position ${q.pos}, ${fmt(q.impressions)} impressions`),
+      supporting_metrics: top.map(
+        (q) => `"${q.q}": position ${q.pos}, ${fmt(q.impressions)} impressions`,
+      ),
     });
   }
 
   if (mob && (mob.lighthouse_score < 50 || mob.field_core_web_vitals_passed === false)) {
     const fix = mob.top_fixes[0];
     const metrics = [`Mobile performance score: ${mob.lighthouse_score}/100`];
-    if (mob.lab_lcp_ms !== null && mob.lab_lcp_ms !== undefined) metrics.push(`Lab LCP: ${r1(mob.lab_lcp_ms / 1000)} s`);
-    if (mob.field_core_web_vitals_passed === false) metrics.push('Core Web Vitals (real users): failed');
+    if (mob.lab_lcp_ms !== null && mob.lab_lcp_ms !== undefined)
+      metrics.push(`Lab LCP: ${r1(mob.lab_lcp_ms / 1000)} s`);
+    if (mob.field_core_web_vitals_passed === false)
+      metrics.push('Core Web Vitals (real users): failed');
     out.push({
       title: fix ? `Fix the top mobile speed issue: ${fix}` : 'Improve mobile page speed',
-      description: 'Work through the top PageSpeed recommendations for the mobile version of the home page.',
+      description:
+        'Work through the top PageSpeed recommendations for the mobile version of the home page.',
       why: 'Slow mobile pages lose visitors and can hurt search visibility.',
-      expected_impact: 'Could improve mobile speed and reduce visitors leaving before the page loads.',
+      expected_impact:
+        'Could improve mobile speed and reduce visitors leaving before the page loads.',
       supporting_metrics: metrics,
     });
   }
@@ -135,7 +143,8 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
   if (sc && sc.ctr_pct < 2 && sc.impressions >= 1000) {
     out.push({
       title: 'Rewrite titles and meta descriptions to lift click-through rate',
-      description: 'Make titles of the top pages more specific and add a clear benefit in meta descriptions.',
+      description:
+        'Make titles of the top pages more specific and add a clear benefit in meta descriptions.',
       why: 'The site is shown often in Google but few searchers click.',
       expected_impact: 'A higher CTR could bring more clicks without needing better rankings.',
       supporting_metrics: [`CTR: ${sc.ctr_pct}%`, `Impressions: ${fmt(sc.impressions)}`],
@@ -145,7 +154,8 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
   if (ga && ga.sessions_change_pct !== null && ga.sessions_change_pct <= -10) {
     out.push({
       title: 'Investigate the drop in website traffic',
-      description: 'Compare traffic channels and landing pages with the previous period to find where visits fell.',
+      description:
+        'Compare traffic channels and landing pages with the previous period to find where visits fell.',
       why: 'Sessions dropped noticeably compared with the previous 28 days.',
       expected_impact: 'Finding the cause early makes it easier to recover lost visits.',
       supporting_metrics: [`Sessions: ${fmt(ga.sessions)} (${pct(ga.sessions_change_pct)})`],
@@ -165,7 +175,8 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
   if (ga && ga.engagement_rate_pct < 40 && ga.sessions >= 100) {
     out.push({
       title: 'Improve engagement on the top landing pages',
-      description: 'Add a clear headline, faster first view and an obvious call-to-action on the main landing pages.',
+      description:
+        'Add a clear headline, faster first view and an obvious call-to-action on the main landing pages.',
       why: 'Many visitors leave without engaging with the site.',
       expected_impact: 'Could increase engaged visits and leads from the same traffic.',
       supporting_metrics: [`Engagement rate: ${ga.engagement_rate_pct}%`],
@@ -177,7 +188,8 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
       title: 'Connect Google Search Console',
       description: 'Connect the client Google account and select the Search Console property.',
       why: 'Without Search Console data, keyword rankings and click trends cannot be analysed.',
-      expected_impact: 'Unlocks keyword opportunities and dropping-page alerts in the next health check.',
+      expected_impact:
+        'Unlocks keyword opportunities and dropping-page alerts in the next health check.',
       supporting_metrics: ['Search Console data: not connected'],
     });
   }
@@ -195,30 +207,39 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
   const generic: Candidate[] = [
     {
       title: 'Add a clear call-to-action on the top landing page',
-      description: 'Make sure the main page shows a phone number, WhatsApp button or enquiry form above the fold.',
+      description:
+        'Make sure the main page shows a phone number, WhatsApp button or enquiry form above the fold.',
       why: 'Clear next steps help turn visits into enquiries.',
       expected_impact: 'Could increase enquiries from existing traffic.',
       supporting_metrics: ga?.top_landing_pages[0]
-        ? [`Top landing page: ${ga.top_landing_pages[0].page} (${fmt(ga.top_landing_pages[0].sessions)} sessions)`]
+        ? [
+            `Top landing page: ${ga.top_landing_pages[0].page} (${fmt(ga.top_landing_pages[0].sessions)} sessions)`,
+          ]
         : [`Health score: ${s.health_score ?? 'n/a'}/100`],
     },
     {
       title: 'Publish one new page targeting a relevant search query',
-      description: 'Write a helpful page or blog post around a service + city query the business wants to rank for.',
+      description:
+        'Write a helpful page or blog post around a service + city query the business wants to rank for.',
       why: 'Regular, relevant content gives Google more pages to rank.',
       expected_impact: 'May bring new search impressions over the coming months.',
-      supporting_metrics: sc ? [`Impressions (28 days): ${fmt(sc.impressions)}`] : [`Health score: ${s.health_score ?? 'n/a'}/100`],
+      supporting_metrics: sc
+        ? [`Impressions (28 days): ${fmt(sc.impressions)}`]
+        : [`Health score: ${s.health_score ?? 'n/a'}/100`],
     },
     {
       title: 'Check Search Console for indexing and coverage issues',
       description: 'Open the Pages report in Search Console and fix pages that are not indexed.',
       why: 'Pages that are not indexed cannot appear in Google search.',
       expected_impact: 'Helps make sure important pages can be found in search.',
-      supporting_metrics: sc ? [`Average position: ${sc.avg_position}`] : ['Search Console data: not connected'],
+      supporting_metrics: sc
+        ? [`Average position: ${sc.avg_position}`]
+        : ['Search Console data: not connected'],
     },
     {
       title: 'Review progress in next week’s health check',
-      description: 'Compare next week’s score and metrics with this week to see which actions worked.',
+      description:
+        'Compare next week’s score and metrics with this week to see which actions worked.',
       why: 'Tracking changes weekly shows what is improving.',
       expected_impact: 'Keeps the work focused on actions that move the numbers.',
       supporting_metrics: [`Health score: ${s.health_score ?? 'n/a'}/100`],
@@ -229,15 +250,22 @@ export function buildFallbackInsights(s: CompactSummary): InsightResult {
   const action_items = out.slice(0, 5).map((a, i) => ({ ...a, priority: i + 1 }));
 
   const parts: string[] = [];
-  if (sc) parts.push(`In the last 28 days the site received ${fmt(sc.clicks)} search clicks (${pct(sc.clicks_change_pct)} vs the previous 28 days) at an average position of ${sc.avg_position}.`);
+  if (sc)
+    parts.push(
+      `In the last 28 days the site received ${fmt(sc.clicks)} search clicks (${pct(sc.clicks_change_pct)} vs the previous 28 days) at an average position of ${sc.avg_position}.`,
+    );
   if (ga) parts.push(`Website sessions were ${fmt(ga.sessions)} (${pct(ga.sessions_change_pct)}).`);
   if (mob) parts.push(`The mobile performance score is ${mob.lighthouse_score}/100.`);
   parts.push(`The health score is ${s.health_score ?? 'n/a'}/100.`);
   const summary = `${parts.join(' ')} These recommendations were generated by rules because AI insights were unavailable.`;
 
   const hParts: string[] = [];
-  if (sc) hParts.push(`Pichle 28 din mein site ko ${fmt(sc.clicks)} search clicks mile (${pct(sc.clicks_change_pct)}).`);
-  if (ga) hParts.push(`Website sessions ${fmt(ga.sessions)} rahe (${pct(ga.sessions_change_pct)}).`);
+  if (sc)
+    hParts.push(
+      `Pichle 28 din mein site ko ${fmt(sc.clicks)} search clicks mile (${pct(sc.clicks_change_pct)}).`,
+    );
+  if (ga)
+    hParts.push(`Website sessions ${fmt(ga.sessions)} rahe (${pct(ga.sessions_change_pct)}).`);
   if (mob) hParts.push(`Mobile speed score ${mob.lighthouse_score}/100 hai.`);
   hParts.push(`Health score ${s.health_score ?? 'n/a'}/100 hai.`);
   const summary_hinglish = `${hParts.join(' ')} Ye suggestions rules se bane hain kyunki AI available nahi tha.`;
@@ -264,5 +292,10 @@ export function findUngroundedNumbers(metrics: string[], source: CompactSummary)
   const close = (a: number, b: number) => Math.abs(a - b) <= Math.max(0.6, Math.abs(b) * 0.01);
   return metrics
     .flatMap(numbersIn)
-    .filter((n) => !known.some((k) => close(Math.abs(n), Math.abs(k)) || close(Math.abs(n), Math.abs(k) / 1000)));
+    .filter(
+      (n) =>
+        !known.some(
+          (k) => close(Math.abs(n), Math.abs(k)) || close(Math.abs(n), Math.abs(k) / 1000),
+        ),
+    );
 }

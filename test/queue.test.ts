@@ -31,7 +31,14 @@ afterAll(async () => {
 });
 
 function fakeMessage(body: JobMessage, attempts = 1) {
-  return { id: crypto.randomUUID(), timestamp: new Date(), body, attempts, ack: vi.fn(), retry: vi.fn() };
+  return {
+    id: crypto.randomUUID(),
+    timestamp: new Date(),
+    body,
+    attempts,
+    ack: vi.fn(),
+    retry: vi.fn(),
+  };
 }
 
 describe('isoWeek', () => {
@@ -44,10 +51,18 @@ describe('isoWeek', () => {
 
 describe('idempotent scheduling', () => {
   it('a duplicate dedupe key is skipped', async () => {
-    const job = { agencyId: 'ag', clientId: 'c1', type: 'health_check' as const, trigger: 'cron' as const, dedupeKey: 'test:c1:k' };
+    const job = {
+      agencyId: 'ag',
+      clientId: 'c1',
+      type: 'health_check' as const,
+      trigger: 'cron' as const,
+      dedupeKey: 'test:c1:k',
+    };
     expect(await enqueueJobs(env, [job])).toHaveLength(1);
     expect(await enqueueJobs(env, [job])).toHaveLength(0);
-    const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM job_runs WHERE dedupe_key='test:c1:k'`).first<{ n: number }>();
+    const n = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM job_runs WHERE dedupe_key='test:c1:k'`,
+    ).first<{ n: number }>();
     expect(n?.n).toBe(1);
   });
 
@@ -63,8 +78,12 @@ describe('idempotent scheduling', () => {
   });
 
   it('manual runs have no dedupe key (always allowed, guarded by hasPendingJob instead)', async () => {
-    const a = await enqueueJobs(env, [{ agencyId: 'ag', clientId: 'c2', type: 'health_check', trigger: 'manual' }]);
-    const b = await enqueueJobs(env, [{ agencyId: 'ag', clientId: 'c2', type: 'health_check', trigger: 'manual' }]);
+    const a = await enqueueJobs(env, [
+      { agencyId: 'ag', clientId: 'c2', type: 'health_check', trigger: 'manual' },
+    ]);
+    const b = await enqueueJobs(env, [
+      { agencyId: 'ag', clientId: 'c2', type: 'health_check', trigger: 'manual' },
+    ]);
     expect(a).toHaveLength(1);
     expect(b).toHaveLength(1);
   });
@@ -75,10 +94,20 @@ describe('consumer safety', () => {
     await env.DB.prepare(
       `INSERT INTO job_runs (id,agency_id,client_id,type,trigger,status,attempt,created_at) VALUES ('done-job','ag','c1','health_check','cron','success',1,0)`,
     ).run();
-    const msg = fakeMessage({ jobRunId: 'done-job', agencyId: 'ag', clientId: 'c1', type: 'health_check' });
-    await handleQueueBatch({ queue: 'agency-jobs', messages: [msg] } as unknown as MessageBatch<JobMessage>, env);
+    const msg = fakeMessage({
+      jobRunId: 'done-job',
+      agencyId: 'ag',
+      clientId: 'c1',
+      type: 'health_check',
+    });
+    await handleQueueBatch(
+      { queue: 'agency-jobs', messages: [msg] } as unknown as MessageBatch<JobMessage>,
+      env,
+    );
     expect(msg.ack).toHaveBeenCalled();
-    const row = await env.DB.prepare(`SELECT status, started_at FROM job_runs WHERE id='done-job'`).first<{ status: string; started_at: number | null }>();
+    const row = await env.DB.prepare(
+      `SELECT status, started_at FROM job_runs WHERE id='done-job'`,
+    ).first<{ status: string; started_at: number | null }>();
     expect(row).toEqual({ status: 'success', started_at: null }); // untouched, not re-run
   });
 
@@ -86,10 +115,18 @@ describe('consumer safety', () => {
     await env.DB.prepare(
       `INSERT INTO job_runs (id,agency_id,client_id,type,trigger,status,attempt,created_at) VALUES ('dlq-job','ag','c1','health_check','cron','running',3,0)`,
     ).run();
-    const msg = fakeMessage({ jobRunId: 'dlq-job', agencyId: 'ag', clientId: 'c1', type: 'health_check' }, 4);
-    await handleQueueBatch({ queue: 'agency-jobs-dlq', messages: [msg] } as unknown as MessageBatch<JobMessage>, env);
+    const msg = fakeMessage(
+      { jobRunId: 'dlq-job', agencyId: 'ag', clientId: 'c1', type: 'health_check' },
+      4,
+    );
+    await handleQueueBatch(
+      { queue: 'agency-jobs-dlq', messages: [msg] } as unknown as MessageBatch<JobMessage>,
+      env,
+    );
     expect(msg.ack).toHaveBeenCalled();
-    const row = await env.DB.prepare(`SELECT status, error FROM job_runs WHERE id='dlq-job'`).first<{ status: string; error: string }>();
+    const row = await env.DB.prepare(
+      `SELECT status, error FROM job_runs WHERE id='dlq-job'`,
+    ).first<{ status: string; error: string }>();
     expect(row?.status).toBe('failed');
     expect(row?.error).toMatch(/dead-letter/);
   });
