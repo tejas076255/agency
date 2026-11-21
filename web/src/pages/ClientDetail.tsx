@@ -184,6 +184,15 @@ export function ClientDetailPage() {
                   ))}
                 </ul>
               )}
+              {gsc && gsc.totals.current.impressions === 0 && (
+                <p className="mt-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+                  ℹ Search Console returned <b>no data</b> for <b>{client.gscSiteUrl}</b> in the
+                  last 28 days. If the site gets Google traffic, the wrong property may be selected:
+                  a property starting with <b>http://</b> does not include <b>https://</b> pages.
+                  Prefer a Domain property (<b>sc-domain:</b>) or the exact https:// address, then
+                  click Change above.
+                </p>
+              )}
             </Card>
 
             <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
