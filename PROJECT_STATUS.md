@@ -3,6 +3,7 @@
 _Last updated: 21 November 2026_
 
 **Live:** https://agency-autopilot.invoice-to-excel.workers.dev
+**Code:** https://github.com/tejas076255/agency (CI on GitHub Actions; Cloudflare Workers Builds deploys `main` automatically)
 
 **Code:** https://github.com/tejas076255/agency (GitHub Actions CI on every push; Cloudflare Workers Builds deploys `main` automatically)
 
