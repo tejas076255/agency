@@ -4,6 +4,8 @@ _Last updated: 21 November 2026_
 
 **Live:** https://agency-autopilot.invoice-to-excel.workers.dev
 
+**Code:** https://github.com/tejas076255/agency (GitHub Actions CI on every push; Cloudflare Workers Builds deploys `main` automatically)
+
 | Phase                    | Code                                       | Verified with real Google APIs                                                                                               | Blocked by                                                                                    |
 | ------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | 1 Core automation        | ✅ Complete                                | Partly: PageSpeed + Workers AI verified live. Search Console, GA4, Slides/Drive/Gmail **not yet tested with a real account** | Owner's end-to-end test                                                                       |
