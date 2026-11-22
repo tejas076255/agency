@@ -45,7 +45,21 @@ export type GbpDiagnostics = {
     endpoint: string;
     failure?: GbpCallFailure;
   }[];
+  /** Status of the selected location from Business Information metadata. */
+  locationStatus?: {
+    title: string | null;
+    verifiedOwnerControl: boolean | null;
+    duplicateOf: string | null;
+    openStatus: string | null;
+    mapsUri: string | null;
+  };
   hints: string[];
+};
+
+type LocationMeta = {
+  title?: string;
+  openInfo?: { status?: string };
+  metadata?: { hasVoiceOfMerchant?: boolean; duplicateLocation?: string; mapsUri?: string };
 };
 
 function errText(e: unknown): string {
@@ -166,7 +180,20 @@ export async function runGbpDiagnostics(
       [
         'business_information',
         gbpInfoUrl(locationName),
-        () => googleRequest(gbpInfoUrl(locationName), { accessToken: token, retries: 0 }),
+        async () => {
+          const meta = await googleRequest<LocationMeta>(gbpInfoUrl(locationName), {
+            accessToken: token,
+            retries: 0,
+          });
+          out.locationStatus = {
+            title: meta.title ?? null,
+            // hasVoiceOfMerchant = verified and the business owner controls the listing.
+            verifiedOwnerControl: meta.metadata?.hasVoiceOfMerchant ?? null,
+            duplicateOf: meta.metadata?.duplicateLocation ?? null,
+            openStatus: meta.openInfo?.status ?? null,
+            mapsUri: meta.metadata?.mapsUri ?? null,
+          };
+        },
       ],
       [
         'performance',
@@ -216,6 +243,23 @@ export async function runGbpDiagnostics(
     if (owning && owning.name !== accountName) {
       hints.push(
         `The location is listed under ${owning.name}, but the app uses ${accountName}. Reviews must use accounts/{accountId}/locations/{locationId} of the account that holds the location: pick the location again.`,
+      );
+    }
+    const st = out.locationStatus;
+    if (st?.verifiedOwnerControl === false) {
+      hints.push(
+        `The selected location "${st.title ?? locationName}" is not verified (no owner control on Google). Google does not return performance data for unverified locations: verify it at business.google.com or select your verified location.`,
+      );
+    }
+    if (st?.duplicateOf) {
+      hints.push(
+        `The selected location is marked by Google as a duplicate of ${st.duplicateOf}. Select the original location instead.`,
+      );
+    }
+    const sameTitle = owning?.locations.filter((l) => st?.title && l.title === st.title) ?? [];
+    if (sameTitle.length > 1) {
+      hints.push(
+        `There are ${sameTitle.length} locations named "${st?.title}" (${sameTitle.map((l) => l.name).join(', ')}). Make sure the verified one is selected.`,
       );
     }
     const myRole = owning?.locations.find((l) => l.name === locationName)?.yourRole;

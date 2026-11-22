@@ -1106,7 +1106,13 @@ type Diagnostics = {
     accountName: string;
     type: string | null;
     role: string | null;
-    locations: { name: string; title: string; yourRole: string | null; adminsError?: string }[];
+    locations: {
+      name: string;
+      title: string;
+      yourRole: string | null;
+      admins?: { admin: string; role: string }[];
+      adminsError?: string;
+    }[];
     locationsError?: string;
   }[];
   accountsError?: string;
@@ -1116,6 +1122,12 @@ type Diagnostics = {
     endpoint: string;
     failure?: { status: number | null; reason: string; message: string; body: string | null };
   }[];
+  locationStatus?: {
+    title: string | null;
+    verifiedOwnerControl: boolean | null;
+    duplicateOf: string | null;
+    openStatus: string | null;
+  };
   hints: string[];
 };
 
@@ -1177,6 +1189,32 @@ function GbpDiagnosticsCard({ clientId }: { clientId: string }) {
               Scopes: {report.token.scopes.join(' ')}
             </p>
           </div>
+          {report.locationStatus && (
+            <div>
+              <h4 className="font-medium">Selected location status</h4>
+              <p className="text-xs text-slate-600">
+                {report.locationStatus.title ?? '?'} · verified (owner control):{' '}
+                <b
+                  className={
+                    report.locationStatus.verifiedOwnerControl === false
+                      ? 'text-red-700'
+                      : report.locationStatus.verifiedOwnerControl
+                        ? 'text-green-700'
+                        : ''
+                  }
+                >
+                  {report.locationStatus.verifiedOwnerControl === null
+                    ? 'unknown'
+                    : report.locationStatus.verifiedOwnerControl
+                      ? 'yes'
+                      : 'no'}
+                </b>
+                {report.locationStatus.duplicateOf &&
+                  ` · duplicate of ${report.locationStatus.duplicateOf}`}
+                {report.locationStatus.openStatus && ` · ${report.locationStatus.openStatus}`}
+              </p>
+            </div>
+          )}
           <div>
             <h4 className="font-medium">Sync calls (selected location)</h4>
             <p className="text-xs text-slate-500">
@@ -1214,6 +1252,12 @@ ${p.failure.body ?? ''}`}
                   {a.locations.map((l) => (
                     <li key={l.name} className="text-xs text-slate-600">
                       {l.title} · {l.name} · your role: <b>{l.yourRole ?? 'unknown'}</b>
+                      {!l.yourRole && l.admins && l.admins.length > 0 && (
+                        <span className="text-slate-500">
+                          {' '}
+                          (admins: {l.admins.map((a) => `${a.admin} = ${a.role}`).join(', ')})
+                        </span>
+                      )}
                       {l.adminsError && (
                         <span className="text-red-700"> · roles check failed: {l.adminsError}</span>
                       )}

@@ -147,4 +147,38 @@ describe('runGbpDiagnostics', () => {
     expect(r.token.hasBusinessManage).toBe(false);
     expect(r.hints.join(' ')).toMatch(/does not include business\.manage/);
   });
+
+  it('warns when the selected location is unverified or one of two with the same name', async () => {
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === 'https://oauth2.googleapis.com/tokeninfo')
+        return json({ scope: 'https://www.googleapis.com/auth/business.manage' });
+      if (url.includes('mybusiness.googleapis.com/v4')) return json({ reviews: [] });
+      if (url.startsWith('https://mybusinessaccountmanagement.googleapis.com/v1/accounts?')) {
+        return json({ accounts: [{ name: ACCOUNT, accountName: 'Upmark in', type: 'PERSONAL' }] });
+      }
+      if (url.includes(`/${ACCOUNT}/locations`)) {
+        return json({
+          locations: [
+            { name: LOCATION, title: 'Upmark' },
+            { name: 'locations/12800017052789018310', title: 'Upmark' },
+          ],
+        });
+      }
+      if (url.endsWith('/admins')) return json({ admins: [] });
+      if (url.includes('mybusinessbusinessinformation')) {
+        return json({ name: LOCATION, title: 'Upmark', metadata: { hasVoiceOfMerchant: false } });
+      }
+      if (url.includes('businessprofileperformance')) return json(DENIED, 403);
+      return json({}, 404);
+    });
+    const r = await runGbpDiagnostics('token', 'info.upmark.in@gmail.com', {
+      accountName: ACCOUNT,
+      locationName: LOCATION,
+    });
+    expect(r.locationStatus).toMatchObject({ title: 'Upmark', verifiedOwnerControl: false });
+    const hints = r.hints.join(' ');
+    expect(hints).toMatch(/is not verified/);
+    expect(hints).toMatch(/2 locations named "Upmark"/);
+  });
 });
