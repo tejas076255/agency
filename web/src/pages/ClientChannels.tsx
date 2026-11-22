@@ -23,7 +23,8 @@ const PRODUCT_INFO: Record<Product, { name: string; what: string; approval: stri
   ads: {
     name: 'Google Ads',
     what: 'Spend, clicks, conversions, ROAS and wasted search terms.',
-    approval: 'Needs a Google Ads developer token with Basic Access to read real client accounts.',
+    approval:
+      'Uses the app’s Google Cloud project access. Explorer access is enough for read-only reporting on real accounts (2,880 operations/day).',
   },
   youtube: {
     name: 'YouTube',
@@ -771,12 +772,12 @@ export function AdsTab({
   const ads = data.ads.latest?.data ?? null;
   return (
     <div className="space-y-6">
-      {!data.config.adsDeveloperToken && (
-        <Alert kind="info">
-          Google Ads is not configured on the server yet (missing GOOGLE_ADS_DEVELOPER_TOKEN). See
-          docs/API_INTEGRATIONS.md.
-        </Alert>
-      )}
+      <Alert kind="info">
+        Google Ads works with the app&apos;s Google Cloud project access (no developer token). For
+        real client accounts the project needs <b>Explorer</b> access, which is enough for read-only
+        reporting. If you see a &ldquo;Test access&rdquo; error, apply for Explorer in Google Cloud
+        Console &gt; Google Ads API &gt; Overview.
+      </Alert>
       <ProductCard
         clientId={clientId}
         product="ads"

@@ -7,12 +7,12 @@ _Last updated: 21 November 2026_
 
 **Code:** https://github.com/tejas076255/agency (GitHub Actions CI on every push; Cloudflare Workers Builds deploys `main` automatically)
 
-| Phase                    | Code                                       | Verified with real Google APIs                                                                                               | Blocked by                                                                                    |
-| ------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| 1 Core automation        | ✅ Complete                                | Partly: PageSpeed + Workers AI verified live. Search Console, GA4, Slides/Drive/Gmail **not yet tested with a real account** | Owner's end-to-end test                                                                       |
-| 2 Local SEO & reputation | ✅ Complete (mock-tested)                  | ❌ Not verified                                                                                                              | Business Profile API access approval; billing for Places + Natural Language                   |
-| 3 Advertising & YouTube  | ✅ Complete (mock-tested)                  | ❌ Not verified                                                                                                              | Google Ads developer token (Basic Access); YouTube needs only the channel owner's sign-in     |
-| 4 Billing                | 🟡 4A + 4B done (plans, limits, Plan page) | –                                                                                                                            | **4C payments not built**: needs the owner's approval of a payment provider (likely Razorpay) |
+| Phase                    | Code                                       | Verified with real Google APIs                                                                                               | Blocked by                                                                                        |
+| ------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1 Core automation        | ✅ Complete                                | Partly: PageSpeed + Workers AI verified live. Search Console, GA4, Slides/Drive/Gmail **not yet tested with a real account** | Owner's end-to-end test                                                                           |
+| 2 Local SEO & reputation | ✅ Complete (mock-tested)                  | ❌ Not verified                                                                                                              | Business Profile API access approval; billing for Places + Natural Language                       |
+| 3 Advertising & YouTube  | ✅ Complete (mock-tested)                  | ❌ Not verified                                                                                                              | Google Ads: Explorer access for the Cloud project; YouTube needs only the channel owner's sign-in |
+| 4 Billing                | 🟡 4A + 4B done (plans, limits, Plan page) | –                                                                                                                            | **4C payments not built**: needs the owner's approval of a payment provider (likely Razorpay)     |
 
 "Mock-tested" = covered by automated tests with simulated Google responses (142 tests). It has not received
 real data from Google yet, so field-level surprises are possible.
@@ -63,8 +63,8 @@ real data from Google yet, so field-level surprises are possible.
 2. Business Profile: apply for API access (see docs/API_INTEGRATIONS.md); add `business.manage` to the consent screen.
 3. Places + Natural Language: enable billing, create two restricted API keys, then
    `npx wrangler secret put PLACES_API_KEY` and `npx wrangler secret put NATURAL_LANGUAGE_API_KEY`.
-4. Google Ads: manager account → developer token → apply for Basic Access →
-   `npx wrangler secret put GOOGLE_ADS_DEVELOPER_TOKEN`.
+4. Google Ads: enable "Google Ads API" in Cloud project 91010309450, then apply for **Explorer** access
+   (Cloud Console > Google Ads API > Overview). Developer tokens are no longer used (sunset Sep 2026).
 5. YouTube: enable "YouTube Data API v3" and "YouTube Analytics API"; add both YouTube scopes to the consent screen.
 6. Consent screen branding (home, /privacy, /terms), real Turnstile widget, AI Gateway, Workers Paid plan check.
 7. Decide the payment provider for Phase 4C.
@@ -74,5 +74,5 @@ real data from Google yet, so field-level surprises are possible.
 - Testing-mode OAuth: refresh tokens expire after 7 days; only test users can sign in.
 - Workers Free plan: 10 ms CPU per request may break heavy jobs (reports, large syncs) → Workers Paid recommended.
 - KV free plan: 1,000 writes/day.
-- Google Ads API version defaults to `v21` (`GOOGLE_ADS_API_VERSION`); Google sunsets versions roughly yearly.
+- Google Ads API version defaults to `v26` (`GOOGLE_ADS_API_VERSION`); Google sunsets versions roughly yearly.
 - Review sync reads the newest 200 reviews per run; sentiment is limited to 25 new reviews per run.

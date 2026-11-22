@@ -159,7 +159,7 @@ story += [
         ["Google Business Profile and reviews", "Built, waiting for Google", "Google must approve Business Profile API access"],
         ["Competitors (Places)", "Built, waiting for setup", "Billing on Google Cloud + PLACES_API_KEY"],
         ["Review sentiment", "Built, waiting for setup", "Billing on Google Cloud + NATURAL_LANGUAGE_API_KEY"],
-        ["Google Ads", "Built, waiting for Google", "Developer token with Basic Access"],
+        ["Google Ads", "Built, waiting for setup", "Explorer access for the app's Google Cloud project"],
         ["Online payments for plans", "Not built", "Owner must choose a payment provider first"],
     ], [62 * mm, 46 * mm, 62 * mm]),
     note("While the Google sign-in app is in <b>Testing</b> mode, only Google accounts added as <b>Test users</b> in Google Cloud "
@@ -334,7 +334,7 @@ story += [
     p("On the <b>Google Ads</b> tab, click <b>Connect</b>, sign in with an account that can see the client's Ads account, and choose the "
       "account. You will see spend, clicks, conversions, cost per conversion, ROAS (only if conversion values are tracked), daily "
       "spend, campaigns with budget use, and <b>wasted search terms</b> (searches that cost money but brought no conversions)."),
-    note("Reading real Ads accounts needs the app's Google Ads developer token to have Basic Access.", "warn"),
+    note("Reading real Ads accounts needs the app's Google Cloud project to have Explorer access (enough for read-only reporting).", "warn"),
     p("YouTube", H2),
     p("On the <b>YouTube</b> tab, the <b>channel owner</b> clicks <b>Connect</b> and chooses the channel. You will see views, watch time, "
       "net subscribers, average view duration, daily views and the top videos of the last 28 days."),
@@ -408,7 +408,7 @@ story += [
         ["Report says \"Connect your agency Google account\"", "Settings > Reports: agency Google account > Connect"],
         ["Business Profile says \"not approved\"", "Google has not approved Business Profile API access yet; wait for approval"],
         ["Competitors / sentiment say \"not configured\"", "The Places / Natural Language API key has not been added yet"],
-        ["Google Ads says \"Test Account Access\"", "The developer token needs Basic Access from Google"],
+        ["Google Ads says \"Test access\" / not approved", "Apply for Explorer access: Google Cloud Console > Google Ads API > Overview"],
         ["\"Your plan allows ...\" message", "You reached a plan limit; contact the app operator to change the plan"],
         ["\"Invalid or missing CSRF token\"", "Refresh the page and try again"],
         ["A job failed", "Open Job logs, read the error, fix the cause, then click Run now"],

@@ -1,42 +1,55 @@
 // Google Ads API (Phase 3), REST interface with GAQL.
-// Needs: OAuth scope adwords + a developer token from a Google Ads MANAGER account.
-// A new token only has "Test Account Access"; real client accounts need Basic Access approval.
+// Access model since 9 Sep 2026: developer tokens are sunset. API access comes from the Google
+// Cloud project that owns the OAuth client (Test -> Explorer -> Basic -> Standard). Calls need only
+// an OAuth access token with scope https://www.googleapis.com/auth/adwords; no developer-token
+// header is sent. Explorer access is enough for read-only reporting on production accounts.
+// See https://developers.google.com/ads/blog/posts/2026/09/new-onboarding-experience-for-google-ads-api
 import type { Env } from '../env';
 import { comparePeriods, pctChange, round, type DateRange } from '../lib/dates';
 import { googleRequest, GoogleApiError } from './http';
 
-export class AdsNotConfiguredError extends Error {
-  constructor(msg = 'Google Ads is not configured: set the GOOGLE_ADS_DEVELOPER_TOKEN secret.') {
+/** Default Google Ads API version (override with GOOGLE_ADS_API_VERSION when Google releases a new one). */
+export const DEFAULT_ADS_API_VERSION = 'v26';
+
+/** Access problem on the Google side (API not enabled, project not approved for production). */
+export class AdsAccessError extends Error {
+  constructor(msg: string) {
     super(msg);
-    this.name = 'AdsNotConfiguredError';
+    this.name = 'AdsAccessError';
   }
 }
 
-type AdsEnv = Pick<
-  Env,
-  'GOOGLE_ADS_DEVELOPER_TOKEN' | 'GOOGLE_ADS_LOGIN_CUSTOMER_ID' | 'GOOGLE_ADS_API_VERSION'
->;
+type AdsEnv = Pick<Env, 'GOOGLE_ADS_LOGIN_CUSTOMER_ID' | 'GOOGLE_ADS_API_VERSION'>;
 
-function base(env: AdsEnv) {
-  return `https://googleads.googleapis.com/${env.GOOGLE_ADS_API_VERSION || 'v21'}`;
+export function adsBaseUrl(env: AdsEnv) {
+  return `https://googleads.googleapis.com/${env.GOOGLE_ADS_API_VERSION || DEFAULT_ADS_API_VERSION}`;
 }
 
-function headers(env: AdsEnv): Record<string, string> {
-  if (!env.GOOGLE_ADS_DEVELOPER_TOKEN) throw new AdsNotConfiguredError();
-  const h: Record<string, string> = { 'developer-token': env.GOOGLE_ADS_DEVELOPER_TOKEN };
-  if (env.GOOGLE_ADS_LOGIN_CUSTOMER_ID)
-    h['login-customer-id'] = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID.replace(/-/g, '');
+/**
+ * Only login-customer-id: required (10-digit manager id, no dashes) when client accounts are read
+ * through a manager (MCC) account; omitted when the user signs in directly to the client account.
+ */
+export function adsHeaders(env: AdsEnv): Record<string, string> {
+  const h: Record<string, string> = {};
+  const mcc = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/-/g, '');
+  if (mcc) h['login-customer-id'] = mcc;
   return h;
 }
 
-function explain(err: unknown): never {
-  if (
-    err instanceof GoogleApiError &&
-    /DEVELOPER_TOKEN_NOT_APPROVED|test account/i.test(err.message + err.reason)
-  ) {
-    throw new AdsNotConfiguredError(
-      'Your Google Ads developer token only has Test Account Access. Apply for Basic Access to read real client accounts.',
-    );
+/** Turns Google's access errors into actionable messages. */
+export function explainAdsError(err: unknown): never {
+  if (err instanceof GoogleApiError) {
+    const text = `${err.reason} ${err.message}`;
+    if (/CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION|ACTION_NOT_PERMITTED/i.test(text)) {
+      throw new AdsAccessError(
+        'This Google Cloud project only has Test access to the Google Ads API. Apply for Explorer access (Google Cloud Console > Google Ads API > Overview); Explorer is enough for read-only reporting on real accounts.',
+      );
+    }
+    if (/SERVICE_DISABLED|has not been used in project|is disabled/i.test(text)) {
+      throw new AdsAccessError(
+        'The Google Ads API is not enabled in this Google Cloud project. Enable it in Google Cloud Console > APIs & Services > Library > Google Ads API.',
+      );
+    }
   }
   throw err;
 }
@@ -44,10 +57,10 @@ function explain(err: unknown): never {
 export async function listAdsCustomers(env: AdsEnv, token: string) {
   try {
     const data = await googleRequest<{ resourceNames?: string[] }>(
-      `${base(env)}/customers:listAccessibleCustomers`,
+      `${adsBaseUrl(env)}/customers:listAccessibleCustomers`,
       {
         accessToken: token,
-        headers: headers(env),
+        headers: adsHeaders(env),
         retries: 1,
       },
     );
@@ -78,7 +91,7 @@ export async function listAdsCustomers(env: AdsEnv, token: string) {
     );
     return out;
   } catch (err) {
-    explain(err);
+    explainAdsError(err);
   }
 }
 
@@ -94,10 +107,10 @@ export async function gaql<T>(
     let pageToken: string | undefined;
     do {
       const data = await googleRequest<{ results?: T[]; nextPageToken?: string }>(
-        `${base(env)}/customers/${customerId}/googleAds:search`,
+        `${adsBaseUrl(env)}/customers/${customerId}/googleAds:search`,
         {
           accessToken: token,
-          headers: headers(env),
+          headers: adsHeaders(env),
           json: { query, ...(pageToken ? { pageToken } : {}) },
           retries: 2,
         },
@@ -107,7 +120,7 @@ export async function gaql<T>(
     } while (pageToken && out.length < 5000);
     return out;
   } catch (err) {
-    explain(err);
+    explainAdsError(err);
   }
 }
 

@@ -178,8 +178,9 @@ export function AdvertisingPage() {
       {!rows && !error && <ListSkeleton />}
       {rows && active.length === 0 && (
         <Card className="py-10 text-center text-sm text-slate-500">
-          No client has Google Ads connected yet. Reading real Ads accounts needs a developer token
-          with Basic Access.
+          No client has Google Ads connected yet. Open a client, Google Ads tab, Connect. Read-only
+          reporting on real accounts needs the app&apos;s Google Cloud project to have Explorer
+          access.
         </Card>
       )}
       {active.length > 0 && (

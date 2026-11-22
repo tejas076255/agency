@@ -92,4 +92,4 @@ Share links use a 192-bit random token (`/r/:token`), are read-only, `noindex`, 
   text; exports label AI-derived columns.
 - **Review replies** are posted only on an explicit user action and are audited (`review.reply`).
 - **Tenant isolation** for all new routes is covered by `test/phase2-3-api.test.ts`.
-- `PLACES_API_KEY`, `NATURAL_LANGUAGE_API_KEY` and the Ads developer token are Worker secrets, never sent to the browser.
+- `PLACES_API_KEY` and `NATURAL_LANGUAGE_API_KEY` are Worker secrets, never sent to the browser. Google Ads uses only the OAuth token (no developer token).

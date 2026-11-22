@@ -333,7 +333,6 @@ export type Integrations = {
   config: {
     places: boolean;
     naturalLanguage: boolean;
-    adsDeveloperToken: boolean;
     workspaceConnected: boolean;
   };
   gbp: ProductState<GbpData>;

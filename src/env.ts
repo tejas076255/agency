@@ -31,11 +31,9 @@ export interface Env {
   PLACES_API_KEY?: string;
   /** Cloud Natural Language API key, restricted to that API. Needs billing. */
   NATURAL_LANGUAGE_API_KEY?: string;
-  /** Google Ads developer token (from a manager account; Basic Access for real accounts). */
-  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
-  /** Optional manager (MCC) customer id used as login-customer-id. */
+  /** Optional manager (MCC) customer id, sent as login-customer-id when reading client accounts through it. */
   GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
-  /** Google Ads REST API version, e.g. "v21". Update when Google sunsets versions. */
+  /** Google Ads REST API version (default v26). Access comes from the Cloud project; no developer token. */
   GOOGLE_ADS_API_VERSION?: string;
 }
 

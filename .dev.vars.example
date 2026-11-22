@@ -31,9 +31,8 @@ TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
 # PLACES_API_KEY=
 # Cloud Natural Language API key, restricted to "Cloud Natural Language API". Requires billing.
 # NATURAL_LANGUAGE_API_KEY=
-# Google Ads developer token (Google Ads MANAGER account -> Tools -> API Center). Basic Access needed for real accounts.
-# GOOGLE_ADS_DEVELOPER_TOKEN=
+# Google Ads: no developer token needed (sunset Sep 2026). Access comes from the Google Cloud project (Explorer level).
 # Optional manager account id (digits) used as login-customer-id
 # GOOGLE_ADS_LOGIN_CUSTOMER_ID=
-# Google Ads REST API version (default v21). Update when Google sunsets versions.
-# GOOGLE_ADS_API_VERSION=v21
+# Google Ads REST API version (default v26). Update when Google sunsets versions.
+# GOOGLE_ADS_API_VERSION=v26

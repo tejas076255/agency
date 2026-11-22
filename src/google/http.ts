@@ -43,7 +43,7 @@ type RequestOptions = {
   responseType?: 'json' | 'bytes';
   timeoutMs?: number;
   retries?: number;
-  /** Extra headers (e.g. Places field mask, Ads developer-token). */
+  /** Extra headers (e.g. Places field mask, Ads login-customer-id). */
   headers?: Record<string, string>;
 };
 

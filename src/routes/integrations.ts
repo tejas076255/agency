@@ -130,7 +130,6 @@ integrationRoutes.get('/:id/integrations', async (c) => {
     config: {
       places: Boolean(c.env.PLACES_API_KEY),
       naturalLanguage: Boolean(c.env.NATURAL_LANGUAGE_API_KEY),
-      adsDeveloperToken: Boolean(c.env.GOOGLE_ADS_DEVELOPER_TOKEN),
       workspaceConnected: Boolean(await getConnection(c.env, agencyId, 'agency_workspace')),
     },
     gbp: await product('gbp', client.gbpLocationName),

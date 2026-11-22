@@ -264,7 +264,7 @@ failures, backoff, token caching, revoked tokens) and cron fan-out. No test hits
 - **Phase 2:** Business Profile (calls, directions, reviews; needs Google access approval),
   Places competitor tracking, review sentiment (Natural Language API), Sheets export,
   team member invites, white-label report domain.
-- **Phase 3:** YouTube Data/Analytics, Google Ads (needs developer token approval),
+- **Phase 3:** YouTube Data/Analytics, Google Ads (needs Explorer access on the Google Cloud project),
   optional Google Trends, billing/plans in INR (likely Razorpay).
 
 ## Phase 2 / 3 / 4 setup (optional integrations)
@@ -272,16 +272,16 @@ failures, backoff, token caching, revoked tokens) and cron fan-out. No test hits
 All of these are optional: until configured, each section shows "not configured" or "not approved" instead of fake data.
 Details and approval steps: [docs/API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md).
 
-| Feature                                              | What you need                                       | How to configure                                                                                                                |
-| ---------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Google Business Profile (calls, directions, reviews) | Google approval of Business Profile API access      | Enable the 4 Business Profile APIs, add scope `business.manage` to the consent screen; then on a client, Local SEO tab, Connect |
-| Competitors (Places API New)                         | Billing on the Cloud project                        | Restricted API key, then `npx wrangler secret put PLACES_API_KEY`                                                               |
-| Review sentiment (Natural Language)                  | Billing on the Cloud project                        | Restricted API key, then `npx wrangler secret put NATURAL_LANGUAGE_API_KEY`                                                     |
-| Google Ads                                           | Developer token with Basic Access (manager account) | `npx wrangler secret put GOOGLE_ADS_DEVELOPER_TOKEN` (optional `GOOGLE_ADS_LOGIN_CUSTOMER_ID`); add scope `adwords`             |
-| YouTube                                              | Channel owner signs in                              | Enable YouTube Data API v3 + YouTube Analytics API; add `youtube.readonly` and `yt-analytics.readonly` scopes                   |
-| Sheets export                                        | Agency Google account connected (Settings)          | Nothing extra (uses `drive.file`)                                                                                               |
-| Team members                                         | Pro/Agency plan (Free = owner only)                 | Settings, Team, Invite                                                                                                          |
-| Plans                                                | No payments yet                                     | Change with `npx wrangler d1 execute agency-autopilot --remote --command "UPDATE agencies SET plan='pro' WHERE id='<id>'"`      |
+| Feature                                              | What you need                                                                    | How to configure                                                                                                                                                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Google Business Profile (calls, directions, reviews) | Google approval of Business Profile API access                                   | Enable the 4 Business Profile APIs, add scope `business.manage` to the consent screen; then on a client, Local SEO tab, Connect                                                                      |
+| Competitors (Places API New)                         | Billing on the Cloud project                                                     | Restricted API key, then `npx wrangler secret put PLACES_API_KEY`                                                                                                                                    |
+| Review sentiment (Natural Language)                  | Billing on the Cloud project                                                     | Restricted API key, then `npx wrangler secret put NATURAL_LANGUAGE_API_KEY`                                                                                                                          |
+| Google Ads                                           | Explorer access for the Google Cloud project (no developer token since Sep 2026) | Enable "Google Ads API", apply for Explorer in Cloud Console > Google Ads API > Overview, add scope `adwords`; optional `npx wrangler secret put GOOGLE_ADS_LOGIN_CUSTOMER_ID` for a manager account |
+| YouTube                                              | Channel owner signs in                                                           | Enable YouTube Data API v3 + YouTube Analytics API; add `youtube.readonly` and `yt-analytics.readonly` scopes                                                                                        |
+| Sheets export                                        | Agency Google account connected (Settings)                                       | Nothing extra (uses `drive.file`)                                                                                                                                                                    |
+| Team members                                         | Pro/Agency plan (Free = owner only)                                              | Settings, Team, Invite                                                                                                                                                                               |
+| Plans                                                | No payments yet                                                                  | Change with `npx wrangler d1 execute agency-autopilot --remote --command "UPDATE agencies SET plan='pro' WHERE id='<id>'"`                                                                           |
 
 For local dev put the same names in `.dev.vars` (see `.dev.vars.example`).
 
