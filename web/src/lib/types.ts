@@ -216,7 +216,18 @@ export type Snapshot<T> = {
   runAt: number;
   status: 'ok' | 'failed';
   error: string | null;
+  /** Present only for successful syncs. */
   data: T | null;
+  /** Failed syncs: the exact Google calls that failed. */
+  details?:
+    | {
+        call?: string;
+        endpoint?: string;
+        status?: number | null;
+        reason?: string;
+        message?: string;
+      }[]
+    | null;
 } | null;
 
 export type ProductState<T> = {

@@ -17,7 +17,7 @@ import {
 import { describeError, GoogleApiError } from '../google/http';
 import { analyzeReviewText } from '../google/language';
 import { fetchYouTubeSummary, type YouTubeSummary } from '../google/youtube';
-import { getAccessToken, getConnection } from '../google/tokens';
+import { getConnection, withAccessToken } from '../google/tokens';
 import { getDb } from '../lib/db';
 import { log } from '../lib/log';
 
@@ -81,11 +81,17 @@ export async function latestSnapshot<T>(
     orderBy: desc(integrationSnapshots.runAt),
   });
   if (!row) return null;
+  const parsed = row.dataJson ? (JSON.parse(row.dataJson) as unknown) : null;
   return {
     runAt: row.runAt,
     status: row.status,
     error: row.error,
-    data: row.dataJson ? (JSON.parse(row.dataJson) as T) : null,
+    // Only successful syncs carry data; failed ones keep debugging details separately.
+    data: row.status === 'ok' ? (parsed as T | null) : null,
+    details:
+      row.status === 'failed'
+        ? ((parsed as { failures?: unknown[] } | null)?.failures ?? null)
+        : null,
   };
 }
 
@@ -164,12 +170,13 @@ export async function syncGbp(env: Env, c: Client): Promise<GbpSummary | null> {
   if (!c.gbpLocationName || !c.gbpAccountName) return null;
   const conn = await getConnection(env, c.agencyId, 'client_business', c.id);
   if (!conn) return null;
-  const token = await getAccessToken(env, conn);
+  const account = c.gbpAccountName;
+  const location = c.gbpLocationName;
   const {
     summary,
     reviews: raw,
     failures,
-  } = await fetchGbpSummary(token, c.gbpAccountName, c.gbpLocationName);
+  } = await withAccessToken(env, conn, (token) => fetchGbpSummary(token, account, location));
   if (failures.length) {
     // Full detail in the Worker logs (secrets are redacted by the logger).
     log.error('Business Profile sync: some calls failed', undefined, { clientId: c.id, failures });
@@ -183,16 +190,16 @@ export async function syncAds(env: Env, c: Client): Promise<AdsSummary | null> {
   if (!c.adsCustomerId) return null;
   const conn = await getConnection(env, c.agencyId, 'client_ads', c.id);
   if (!conn) return null;
-  const token = await getAccessToken(env, conn);
-  return fetchAdsSummary(env, token, c.adsCustomerId);
+  const customerId = c.adsCustomerId;
+  return withAccessToken(env, conn, (token) => fetchAdsSummary(env, token, customerId));
 }
 
 export async function syncYouTube(env: Env, c: Client): Promise<YouTubeSummary | null> {
   if (!c.youtubeChannelId) return null;
   const conn = await getConnection(env, c.agencyId, 'client_youtube', c.id);
   if (!conn) return null;
-  const token = await getAccessToken(env, conn);
-  return fetchYouTubeSummary(token, c.youtubeChannelId);
+  const channelId = c.youtubeChannelId;
+  return withAccessToken(env, conn, (token) => fetchYouTubeSummary(token, channelId));
 }
 
 /** Syncs every configured product for the client. Never throws. */

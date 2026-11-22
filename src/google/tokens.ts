@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { clients, googleConnections } from '../db/schema';
 import type { Env } from '../env';
 import { decryptSecret, encryptSecret, keyRingFromEnv, needsReencryption } from '../lib/crypto';
@@ -212,17 +212,67 @@ export async function markRevoked(env: Env, conn: Connection) {
   await env.KV.delete(accessTokenKey(conn.id));
 }
 
+/** Forgets the cached access token so the next call refreshes it. */
+export async function invalidateAccessToken(env: Env, conn: Connection) {
+  await env.KV.delete(accessTokenKey(conn.id));
+}
+
+/** True for "invalid credentials" errors: a whole failed call or a sync where every call got 401. */
+export function isUnauthenticated(err: unknown): boolean {
+  if (err instanceof GoogleApiError) return err.status === 401;
+  const failures = (err as { failures?: { status: number | null }[] })?.failures;
+  return Array.isArray(failures) && failures.length > 0 && failures.every((f) => f.status === 401);
+}
+
+/**
+ * Runs fn with an access token. If Google rejects the (cached) token with 401, the cache is dropped
+ * and fn is retried once with a freshly refreshed token. If the refresh token itself was revoked,
+ * getAccessToken marks the connection revoked and throws ReconnectNeededError.
+ */
+export async function withAccessToken<T>(
+  env: Env,
+  conn: Connection,
+  fn: (token: string) => Promise<T>,
+): Promise<T> {
+  const token = await getAccessToken(env, conn);
+  try {
+    return await fn(token);
+  } catch (err) {
+    if (!isUnauthenticated(err)) throw err;
+    await invalidateAccessToken(env, conn);
+    const fresh = await getAccessToken(env, conn);
+    return fn(fresh);
+  }
+}
+
 /** Disconnect: revoke at Google (best effort) and delete our copy. */
 export async function deleteConnection(env: Env, conn: Connection) {
-  try {
-    const token = await decryptSecret(conn.encryptedRefreshToken, keyRingFromEnv(env));
-    await fetch('https://oauth2.googleapis.com/revoke', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ token }).toString(),
-    });
-  } catch (err) {
-    log.warn('Token revoke failed (ignored)', err);
+  // Google keeps ONE grant per Google user + OAuth client. Revoking any of its refresh tokens
+  // revokes the whole grant, i.e. also the user's other connections (e.g. Business Profile and
+  // Search Console connected with the same Google account). So only revoke when no other active
+  // connection uses this Google account; otherwise just delete our copy.
+  const others = await getDb(env)
+    .select({ id: googleConnections.id })
+    .from(googleConnections)
+    .where(
+      and(
+        eq(googleConnections.googleEmail, conn.googleEmail),
+        eq(googleConnections.status, 'active'),
+        ne(googleConnections.id, conn.id),
+      ),
+    )
+    .limit(1);
+  if (others.length === 0) {
+    try {
+      const token = await decryptSecret(conn.encryptedRefreshToken, keyRingFromEnv(env));
+      await fetch('https://oauth2.googleapis.com/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }).toString(),
+      });
+    } catch (err) {
+      log.warn('Token revoke failed (ignored)', err);
+    }
   }
   await getDb(env)
     .delete(googleConnections)
