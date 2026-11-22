@@ -43,7 +43,16 @@ async function gbp<T>(
   }
 }
 
-export type GbpAccount = { name: string; accountName: string; type?: string };
+export type GbpAccount = {
+  name: string;
+  accountName: string;
+  /** PERSONAL, LOCATION_GROUP, USER_GROUP or ORGANIZATION */
+  type?: string;
+  /** The signed-in user's role on the account: PRIMARY_OWNER, OWNER, MANAGER, SITE_MANAGER */
+  role?: string;
+  verificationState?: string;
+  vettedState?: string;
+};
 export type GbpLocationOption = {
   name: string;
   title: string;
@@ -161,6 +170,8 @@ type RawPerformance = {
 };
 
 export type GbpSummary = {
+  /** Calls that failed in this sync (partial data). Empty/missing when everything worked. */
+  failures?: GbpCallFailure[];
   location: {
     name: string;
     title: string;
@@ -299,7 +310,7 @@ export async function listReviews(token: string, accountName: string, locationNa
   let pageToken: string | undefined;
   do {
     const u = new URL(
-      `https://mybusiness.googleapis.com/v4/${accountName}/${locationName}/reviews`,
+      `https://mybusiness.googleapis.com/v4/${gbpReviewsPath(accountName, locationName)}/reviews`,
     );
     u.searchParams.set('pageSize', '50');
     u.searchParams.set('orderBy', 'updateTime desc');
@@ -325,14 +336,59 @@ export async function replyToReview(token: string, reviewName: string, comment: 
   });
 }
 
-export async function fetchGbpSummary(
-  token: string,
-  accountName: string,
+/** One failed Business Profile call, with everything needed to debug it. */
+export type GbpCallFailure = {
+  call: 'business_information' | 'performance' | 'reviews';
+  endpoint: string;
+  status: number | null;
+  reason: string;
+  message: string;
+  body: string | null;
+};
+
+export const GBP_CALL_LABEL: Record<GbpCallFailure['call'], string> = {
+  business_information: 'Business Information API (locations.get)',
+  performance: 'Business Profile Performance API (fetchMultiDailyMetricsTimeSeries)',
+  reviews: 'My Business API v4 (accounts.locations.reviews.list)',
+};
+
+export function toCallFailure(call: GbpCallFailure['call'], err: unknown): GbpCallFailure {
+  if (err instanceof GoogleApiError) {
+    return {
+      call,
+      endpoint: err.endpoint ?? '',
+      status: err.status,
+      reason: err.reason,
+      message: err.message,
+      body: err.body ?? null,
+    };
+  }
+  return {
+    call,
+    endpoint: '',
+    status: null,
+    reason: 'error',
+    message: (err as Error)?.message ?? String(err),
+    body: null,
+  };
+}
+
+export function gbpInfoUrl(locationName: string) {
+  return `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}?readMask=${READ_MASK}`;
+}
+
+/** v4 reviews always use the account + location path: accounts/{accountId}/locations/{locationId}/reviews */
+export function gbpReviewsPath(accountName: string, locationName: string) {
+  if (!/^accounts\/\d+$/.test(accountName) || !/^locations\/\d+$/.test(locationName)) {
+    throw new Error(`Invalid Business Profile names: ${accountName} / ${locationName}`);
+  }
+  return `${accountName}/${locationName}`;
+}
+
+export function gbpPerformanceUrl(
   locationName: string,
-  now = Date.now(),
-): Promise<{ summary: GbpSummary; reviews: RawReview[] }> {
-  // Performance data is a few days behind, like Search Console.
-  const period = comparePeriods(now, 3);
+  period: { current: DateRange; previous: DateRange },
+) {
   const perfUrl = new URL(
     `https://businessprofileperformance.googleapis.com/v1/${locationName}:fetchMultiDailyMetricsTimeSeries`,
   );
@@ -346,20 +402,67 @@ export async function fetchGbpSummary(
   perfUrl.searchParams.set('dailyRange.endDate.year', String(ey));
   perfUrl.searchParams.set('dailyRange.endDate.month', String(em));
   perfUrl.searchParams.set('dailyRange.endDate.day', String(ed));
+  return perfUrl.toString();
+}
 
-  const infoUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}?readMask=${READ_MASK}`;
-  const [location, performance, rev] = await Promise.all([
-    gbp<RawLocation>(infoUrl, token),
-    gbp<RawPerformance>(perfUrl.toString(), token),
+/**
+ * Fetches listing info, performance and reviews independently. If some calls fail, the others
+ * are still returned (partial data) together with the exact failures. Throws only if all fail.
+ */
+export async function fetchGbpSummary(
+  token: string,
+  accountName: string,
+  locationName: string,
+  now = Date.now(),
+): Promise<{ summary: GbpSummary; reviews: RawReview[]; failures: GbpCallFailure[] }> {
+  // Performance data is a few days behind, like Search Console.
+  const period = comparePeriods(now, 3);
+  const [info, perf, rev] = await Promise.allSettled([
+    gbp<RawLocation>(gbpInfoUrl(locationName), token),
+    gbp<RawPerformance>(gbpPerformanceUrl(locationName, period), token),
     listReviews(token, accountName, locationName),
   ]);
+  const failures: GbpCallFailure[] = [];
+  if (info.status === 'rejected') failures.push(toCallFailure('business_information', info.reason));
+  if (perf.status === 'rejected') failures.push(toCallFailure('performance', perf.reason));
+  if (rev.status === 'rejected') failures.push(toCallFailure('reviews', rev.reason));
+
+  if (failures.length === 3) {
+    // Not-approved projects fail everything the same way: keep that clear message.
+    const first = [info, perf, rev].find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    if (first.reason instanceof GbpNotApprovedError) throw first.reason;
+    throw new GbpSyncError(failures);
+  }
+
+  const reviewsData: { reviews: RawReview[]; averageRating?: number; totalReviewCount?: number } =
+    rev.status === 'fulfilled' ? rev.value : { reviews: [] };
   return {
     summary: summarizeGbp({
-      location: location ?? { name: locationName },
-      performance: performance ?? {},
+      location: (info.status === 'fulfilled' ? info.value : undefined) ?? { name: locationName },
+      performance: (perf.status === 'fulfilled' ? perf.value : undefined) ?? {},
       period,
-      reviews: rev,
+      reviews: reviewsData,
     }),
-    reviews: rev.reviews,
+    reviews: reviewsData.reviews,
+    failures,
   };
+}
+
+/** Human-readable one-liner per failed call (stored on the snapshot / shown in the UI). */
+export function describeGbpFailures(failures: GbpCallFailure[]): string {
+  return failures
+    .map((f) =>
+      `${GBP_CALL_LABEL[f.call]} failed: ${f.status ?? ''} ${f.reason} - ${f.message}`.replace(
+        /\s+/g,
+        ' ',
+      ),
+    )
+    .join(' | ');
+}
+
+export class GbpSyncError extends Error {
+  constructor(public readonly failures: GbpCallFailure[]) {
+    super(describeGbpFailures(failures));
+    this.name = 'GbpSyncError';
+  }
 }

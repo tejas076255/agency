@@ -214,6 +214,11 @@ export function ProductCard({
           </Alert>
         </div>
       )}
+      {state.latest?.status === 'ok' && state.latest.error && (
+        <div className="mt-3">
+          <Alert kind="info">{state.latest.error}</Alert>
+        </div>
+      )}
       {state.latest?.status === 'ok' && (
         <p className="mt-3 text-xs text-slate-400">
           Last synced {formatDateTime(state.latest.runAt)} · syncs with every health check (Mondays
@@ -247,6 +252,7 @@ export function LocalSeoTab({
         onChange={reload}
         notify={notify}
       />
+      {data.gbp.connection && <GbpDiagnosticsCard clientId={clientId} />}
       {gbp && (
         <>
           <section
@@ -1089,4 +1095,136 @@ export function useIntegrations(clientId: string) {
     void reload();
   }, [clientId]);
   return { data, error, reload };
+}
+
+type Diagnostics = {
+  connectedEmail: string;
+  token: { scopes: string[]; hasBusinessManage: boolean; error?: string };
+  selected: { accountName: string | null; locationName: string | null; reviewsPath: string | null };
+  accounts: {
+    name: string;
+    accountName: string;
+    type: string | null;
+    role: string | null;
+    locations: { name: string; title: string; yourRole: string | null; adminsError?: string }[];
+    locationsError?: string;
+  }[];
+  accountsError?: string;
+  probes: {
+    label: string;
+    ok: boolean;
+    endpoint: string;
+    failure?: { status: number | null; reason: string; message: string; body: string | null };
+  }[];
+  hints: string[];
+};
+
+/** Owner-only Business Profile diagnostics (scopes, accounts, roles, live probe of each sync call). */
+function GbpDiagnosticsCard({ clientId }: { clientId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState<Diagnostics | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      setReport(await api<Diagnostics>(`/api/clients/${clientId}/integrations/gbp/debug`));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-semibold">Business Profile diagnostics</h3>
+          <p className="text-xs text-slate-500">
+            Checks token scopes, accounts, your role on each location and each sync call (owner
+            only).
+          </p>
+        </div>
+        <Button variant="secondary" loading={busy} onClick={run}>
+          Run diagnostics
+        </Button>
+      </div>
+      {error && (
+        <div className="mt-3">
+          <Alert>{error}</Alert>
+        </div>
+      )}
+      {report && (
+        <div className="mt-4 space-y-4 text-sm">
+          <div>
+            <h4 className="font-medium">What to do</h4>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {report.hints.map((h) => (
+                <li key={h}>{h}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium">Token</h4>
+            <p className="text-xs text-slate-600">
+              {report.connectedEmail} · business.manage:{' '}
+              <b className={report.token.hasBusinessManage ? 'text-green-700' : 'text-red-700'}>
+                {report.token.hasBusinessManage ? 'yes' : 'no'}
+              </b>
+              {report.token.error && ` · tokeninfo error: ${report.token.error}`}
+            </p>
+            <p className="break-all text-xs text-slate-500">
+              Scopes: {report.token.scopes.join(' ')}
+            </p>
+          </div>
+          <div>
+            <h4 className="font-medium">Sync calls (selected location)</h4>
+            <p className="text-xs text-slate-500">
+              {report.selected.accountName} / {report.selected.locationName} · reviews path:{' '}
+              {report.selected.reviewsPath ?? 'invalid'}
+            </p>
+            <ul className="mt-2 space-y-2">
+              {report.probes.map((p) => (
+                <li key={p.label} className="rounded border border-slate-200 p-2">
+                  <div className="font-medium">
+                    {p.ok ? '✅' : '❌'} {p.label}
+                  </div>
+                  <div className="break-all text-xs text-slate-500">{p.endpoint}</div>
+                  {p.failure && (
+                    <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-50 p-2 text-xs text-red-700">
+                      {`${p.failure.status ?? ''} ${p.failure.reason}: ${p.failure.message}
+${p.failure.body ?? ''}`}
+                    </pre>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium">Accounts and locations</h4>
+            {report.accountsError && <p className="text-xs text-red-700">{report.accountsError}</p>}
+            {report.accounts.map((a) => (
+              <div key={a.name} className="mt-2 rounded border border-slate-200 p-2">
+                <div className="text-xs">
+                  <b>{a.accountName}</b> · {a.name} · type {a.type ?? '?'} · your account role{' '}
+                  {a.role ?? '?'}
+                </div>
+                {a.locationsError && <p className="text-xs text-red-700">{a.locationsError}</p>}
+                <ul className="mt-1 space-y-1">
+                  {a.locations.map((l) => (
+                    <li key={l.name} className="text-xs text-slate-600">
+                      {l.title} · {l.name} · your role: <b>{l.yourRole ?? 'unknown'}</b>
+                      {l.adminsError && (
+                        <span className="text-red-700"> · roles check failed: {l.adminsError}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
 }

@@ -6,12 +6,15 @@ import type { Env } from '../env';
 import { fetchAdsSummary, type AdsSummary } from '../google/ads';
 import {
   fetchGbpSummary,
+  describeGbpFailures,
+  GbpSyncError,
   originalReviewText,
   STARS,
+  type GbpCallFailure,
   type GbpSummary,
   type RawReview,
 } from '../google/business';
-import { describeError } from '../google/http';
+import { describeError, GoogleApiError } from '../google/http';
 import { analyzeReviewText } from '../google/language';
 import { fetchYouTubeSummary, type YouTubeSummary } from '../google/youtube';
 import { getAccessToken, getConnection } from '../google/tokens';
@@ -35,7 +38,7 @@ async function saveSnapshot(
   env: Env,
   c: Client,
   source: SnapshotSource,
-  result: { data: unknown } | { error: string },
+  result: { data: unknown; warning?: string } | { error: string; details?: unknown },
 ) {
   await getDb(env)
     .insert(integrationSnapshots)
@@ -46,8 +49,19 @@ async function saveSnapshot(
       source,
       runAt: Date.now(),
       status: 'data' in result ? 'ok' : 'failed',
-      dataJson: 'data' in result ? JSON.stringify(result.data) : null,
-      error: 'error' in result ? result.error.slice(0, 500) : null,
+      // Failed syncs keep the debugging details (endpoint, status, Google's response body).
+      dataJson:
+        'data' in result
+          ? JSON.stringify(result.data)
+          : result.details
+            ? JSON.stringify({ failures: result.details })
+            : null,
+      error:
+        'error' in result
+          ? result.error.slice(0, 1000)
+          : result.warning
+            ? `Partial: ${result.warning}`.slice(0, 1000)
+            : null,
     });
 }
 
@@ -151,11 +165,16 @@ export async function syncGbp(env: Env, c: Client): Promise<GbpSummary | null> {
   const conn = await getConnection(env, c.agencyId, 'client_business', c.id);
   if (!conn) return null;
   const token = await getAccessToken(env, conn);
-  const { summary, reviews: raw } = await fetchGbpSummary(
-    token,
-    c.gbpAccountName,
-    c.gbpLocationName,
-  );
+  const {
+    summary,
+    reviews: raw,
+    failures,
+  } = await fetchGbpSummary(token, c.gbpAccountName, c.gbpLocationName);
+  if (failures.length) {
+    // Full detail in the Worker logs (secrets are redacted by the logger).
+    log.error('Business Profile sync: some calls failed', undefined, { clientId: c.id, failures });
+    summary.failures = failures;
+  }
   await upsertReviews(env, c, raw);
   return summary;
 }
@@ -190,12 +209,29 @@ export async function syncIntegrations(env: Env, c: Client): Promise<Integration
         const data = await fn();
         if (data === null) return; // not connected / not selected: nothing to record
         (out as Record<string, unknown>)[source] = data;
-        await saveSnapshot(env, c, source, { data });
+        const failures = (data as { failures?: GbpCallFailure[] }).failures;
+        const warning = failures?.length ? describeGbpFailures(failures) : undefined;
+        if (warning) out.errors[source] = `Partial data: ${warning}`;
+        await saveSnapshot(env, c, source, { data, warning });
       } catch (err) {
-        const msg = describeError(err);
+        const msg = err instanceof GbpSyncError ? err.message : describeError(err);
+        const details =
+          err instanceof GbpSyncError
+            ? err.failures
+            : err instanceof GoogleApiError
+              ? [
+                  {
+                    endpoint: err.endpoint,
+                    status: err.status,
+                    reason: err.reason,
+                    message: err.message,
+                    body: err.body,
+                  },
+                ]
+              : undefined;
         out.errors[source] = msg;
-        log.warn(`Integration sync failed: ${source}`, err, { clientId: c.id });
-        await saveSnapshot(env, c, source, { error: msg }).catch(() => undefined);
+        log.error(`Integration sync failed: ${source}`, err, { clientId: c.id, details });
+        await saveSnapshot(env, c, source, { error: msg, details }).catch(() => undefined);
       }
     }),
   );

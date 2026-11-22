@@ -34,6 +34,7 @@ import {
   type ClientProduct,
 } from '../google/tokens';
 import { listMyChannels, type YouTubeSummary } from '../google/youtube';
+import { runGbpDiagnostics } from '../jobs/gbp-diagnostics';
 import { latestSnapshot, reviewStats } from '../jobs/integrations';
 import { auditRequest } from '../lib/audit';
 import { getDb } from '../lib/db';
@@ -250,6 +251,32 @@ integrationRoutes.get('/:id/integrations/:product/options', async (c) => {
     if (err instanceof ReconnectNeededError) return c.json({ error: 'reconnect_needed' }, 409);
     return c.json({ error: describeError(err) }, 400);
   }
+});
+
+/**
+ * Business Profile diagnostics (owner only): token scopes, accounts, locations, the user's role per
+ * location, and a live probe of each sync call with Google's full error response.
+ * Open in the browser while signed in: /api/clients/<clientId>/integrations/gbp/debug
+ */
+integrationRoutes.get('/:id/integrations/gbp/debug', requireOwner, async (c) => {
+  const client = await loadClient(c);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const conn = await getConnection(c.env, c.get('agencyId'), 'client_business', client.id);
+  if (!conn) return c.json({ error: 'Business Profile is not connected for this client' }, 400);
+  let token: string;
+  try {
+    token = await getAccessToken(c.env, conn);
+  } catch (err) {
+    return c.json({ error: describeError(err) }, 400);
+  }
+  const report = await runGbpDiagnostics(token, conn.googleEmail, {
+    accountName: client.gbpAccountName,
+    locationName: client.gbpLocationName,
+  });
+  return c.json({
+    connection: { status: conn.status, storedScopes: conn.scopes.split(' ') },
+    ...report,
+  });
 });
 
 integrationRoutes.put('/:id/integrations/:product/selection', async (c) => {

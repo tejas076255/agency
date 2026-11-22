@@ -8,6 +8,10 @@ export class GoogleApiError extends Error {
     public readonly status: number,
     public readonly reason: string,
     message: string,
+    /** Request method + URL with secrets (API keys, tokens) redacted. */
+    public readonly endpoint?: string,
+    /** Raw error response body from Google (truncated, secrets redacted). */
+    public readonly body?: string,
   ) {
     super(message);
     this.name = 'GoogleApiError';
@@ -104,18 +108,40 @@ export async function googleRequest<T = unknown>(
       continue;
     }
 
-    const data = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string; status?: string; errors?: { reason?: string }[] } | string;
+    const rawBody = await res.text().catch(() => '');
+    let data: {
+      error?:
+        | {
+            message?: string;
+            status?: string;
+            errors?: { reason?: string }[];
+            details?: { reason?: string }[];
+          }
+        | string;
       error_description?: string;
-    };
+    } = {};
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      // non-JSON error body
+    }
     const e = data.error;
     const message =
       typeof e === 'object'
         ? (e.message ?? `HTTP ${res.status}`)
         : (data.error_description ?? e ?? `HTTP ${res.status}`);
     const reason =
-      typeof e === 'object' ? (e.errors?.[0]?.reason ?? e.status ?? 'error') : (e ?? 'error');
-    throw new GoogleApiError(res.status, reason, message);
+      typeof e === 'object'
+        ? (e.details?.find((d) => d.reason)?.reason ?? e.errors?.[0]?.reason ?? e.status ?? 'error')
+        : (e ?? 'error');
+    const method = opts.method ?? (opts.body || opts.json !== undefined ? 'POST' : 'GET');
+    throw new GoogleApiError(
+      res.status,
+      reason,
+      message,
+      redactString(`${method} ${url}`),
+      redactString(rawBody.slice(0, 2000)),
+    );
   }
 }
 
