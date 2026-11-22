@@ -100,10 +100,10 @@ story += [
     p("Agency Autopilot", TITLE),
     p("User Guide", SUB),
     Spacer(1, 6),
-    p("How to set up your agency, connect clients, read health checks, and send monthly reports", SUB),
+    p("Set up your agency, connect clients, track rankings, use the AI tools, improve Google profiles and send monthly reports", SUB),
     Spacer(1, 18 * mm),
     p(f'App: <link href="{URL}" color="#4f46e5">{URL}</link>', ParagraphStyle("c", parent=BODY, alignment=TA_CENTER)),
-    p("Version: November 2026 (Phases 1-3 and Phase 4 plans)", ParagraphStyle("c2", parent=SMALL, alignment=TA_CENTER)),
+    p("Version: 22 November 2026 (Phases 1-3, plans, keyword tracker, AI features, Google profile editor)", ParagraphStyle("c2", parent=SMALL, alignment=TA_CENTER)),
     PageBreak(),
 ]
 
@@ -112,19 +112,24 @@ story += [p("Contents", H1)]
 contents = [
     "1. What Agency Autopilot does",
     "2. What works today (feature status)",
-    "3. Sign in and create your agency",
-    "4. Settings: branding, Google account for reports, report email, team",
-    "5. Add a client and connect their Google account",
-    "6. Run a health check and read the results",
-    "7. The weekly action plan (AI)",
-    "8. Monthly reports: preview, edit, send, share",
-    "9. Local SEO, reviews and competitors",
-    "10. Google Ads, YouTube and Sheets export",
-    "11. Agency pages: Overview, Local SEO, Advertising, YouTube, Reports, Job logs, Plan",
-    "12. Team members",
-    "13. What runs automatically",
-    "14. Troubleshooting",
-    "15. Good habits and security",
+    "3. Quick start: your first day in 10 steps",
+    "4. Sign in and create your agency",
+    "5. Settings: branding, Google account for reports, report email, team",
+    "6. Add a client and connect their Google account",
+    "7. Run a health check and read the results",
+    "8. The weekly action plan (AI)",
+    "9. Keyword rank tracker",
+    "10. Monthly reports: preview, edit, send, share",
+    "11. Local SEO, reviews and competitors (with AI replies and AI analysis)",
+    "12. Google profile editor and Google Posts",
+    "13. AI tools: assistant, content writer, ad copy, smart alerts",
+    "14. Prospect audits (win new clients)",
+    "15. Google Ads, YouTube and Sheets export",
+    "16. Agency pages and plans",
+    "17. Team members",
+    "18. What runs automatically",
+    "19. Troubleshooting",
+    "20. Good habits and security",
 ]
 story += [p(c) for c in contents]
 story.append(PageBreak())
@@ -139,7 +144,11 @@ story += [
         "gives every client a <b>health score from 0 to 100</b>,",
         "writes a <b>plan of 5 actions for the week</b>, with the reason and expected impact for each,",
         "creates a <b>branded monthly PDF report</b> and emails it to the client from your Gmail,",
-        "optionally tracks <b>Google Business Profile, reviews, competitors, Google Ads and YouTube</b>.",
+        "optionally tracks <b>Google Business Profile, reviews, competitors, Google Ads and YouTube</b>,",
+        "tracks the <b>Google position of chosen keywords</b> every week,",
+        "gives you <b>AI tools</b>: an SEO assistant chat, a content writer, Google Ads copy, review replies and smart alerts,",
+        "lets AI <b>suggest improvements to the Google Business Profile</b> that the owner approves and applies in one click,",
+        "creates <b>free website audits</b> for prospects so you can win new clients.",
     ]),
     p("All times in the app are shown in Indian Standard Time (IST) and numbers use Indian grouping (1,23,456)."),
 ]
@@ -153,13 +162,20 @@ story += [
         ["Feature", "Status", "What is needed"],
         ["Sign in, agency, clients, team, plans", "Ready", "Nothing"],
         ["Website speed (PageSpeed) and AI action plan", "Ready, tested live", "Nothing"],
-        ["Search Console and Google Analytics 4", "Ready, needs your first real test", "Client connects their Google account"],
+        ["Search Console and Google Analytics 4", "Ready, tested live", "Client connects their Google account; GA4 needs the tracking tag on the website"],
+        ["Keyword rank tracker", "Ready, needs your first real test", "Search Console connected"],
         ["Monthly report (Slides, PDF, Gmail)", "Ready, needs your first real test", "Connect the agency Google account in Settings"],
-        ["YouTube", "Ready, not yet tested live", "Channel owner connects; YouTube APIs enabled"],
-        ["Google Business Profile and reviews", "Built, waiting for Google", "Google must approve Business Profile API access"],
-        ["Competitors (Places)", "Built, waiting for setup", "Billing on Google Cloud + PLACES_API_KEY"],
-        ["Review sentiment", "Built, waiting for setup", "Billing on Google Cloud + NATURAL_LANGUAGE_API_KEY"],
-        ["Google Ads", "Built, waiting for setup", "Explorer access for the app's Google Cloud project"],
+        ["Business Profile: listing info and reviews", "Working", "Business Profile connected"],
+        ["Business Profile: performance (calls, views)", "Blocked for the current location", "Location must be verified on Google (owner control)"],
+        ["Google profile editor and Google Posts", "Built, not yet tried live", "Verified location; only the owner can apply"],
+        ["Competitors (Places) and AI competitor analysis", "Ready", "PLACES_API_KEY is set"],
+        ["AI tools (assistant, content, ad copy, review drafts)", "Built, not yet tried live", "Workers AI (free tier is small: see section 13)"],
+        ["Smart alerts", "Built, runs with health checks", "Email needs the agency Google account"],
+        ["Prospect audits", "Built, not yet tried live", "Nothing"],
+        ["Review sentiment", "Waiting for setup", "Billing on Google Cloud + NATURAL_LANGUAGE_API_KEY"],
+        ["Google Ads", "Explorer access active", "Add the adwords scope on the consent screen, then connect"],
+        ["YouTube", "Ready, not yet tested live", "Channel owner connects"],
+        ["WhatsApp bot", "Not built", "Meta WhatsApp Business account"],
         ["Online payments for plans", "Not built", "Owner must choose a payment provider first"],
     ], [62 * mm, 46 * mm, 62 * mm]),
     note("While the Google sign-in app is in <b>Testing</b> mode, only Google accounts added as <b>Test users</b> in Google Cloud "
@@ -167,9 +183,26 @@ story += [
     PageBreak(),
 ]
 
+# ---------------- Quick start ----------------
+story += [
+    p("3. Quick start: your first day in 10 steps", H1),
+    steps([
+        "Sign in, name your agency, pick a brand color and upload your logo (section 4).",
+        "Settings: connect the <b>agency Google account</b> so reports, alert emails and Sheets work (section 5).",
+        "Clients &gt; <b>+ Add client</b>, then <b>Connect Google</b> and pick the Search Console site and GA4 property (section 6).",
+        "Click <b>Run health check</b> and read the score and the 5 actions (sections 7-8).",
+        "<b>Keywords</b> tab: click <b>Track suggestions</b> to follow the client's main searches every week (section 9).",
+        "<b>Local SEO &amp; reviews</b> tab: connect Business Profile, pick the location, reply to reviews with <b>Draft reply with AI</b> (section 11).",
+        "<b>Google profile</b> tab: click <b>Get AI suggestions</b>, review, and the owner clicks <b>Apply to Google</b> (section 12).",
+        "<b>AI tools</b> tab: ask the assistant what to do first this week (section 13).",
+        "<b>Prospect audits</b>: audit a potential client's website and send them the PDF (section 14).",
+        "On the 1st of the month, check <b>Reports</b> and send the monthly report (section 10).",
+    ]),
+]
+
 # ---------------- 3 ----------------
 story += [
-    p("3. Sign in and create your agency", H1),
+    p("4. Sign in and create your agency", H1),
     steps([
         f"Open <b>{URL}</b>.",
         "Wait for the small security check (Turnstile) to show a tick, then click <b>Sign in with Google</b>.",
@@ -184,7 +217,7 @@ story += [
 
 # ---------------- 4 ----------------
 story += [
-    p("4. Settings", H1),
+    p("5. Settings", H1),
     p("Open <b>Settings</b> from the top menu. Only the agency <b>owner</b> can change these settings.", BODY),
     p("Agency branding and logo", H2),
     p("Change the agency name, brand color and logo at any time. Click <b>Save changes</b>."),
@@ -200,7 +233,7 @@ story += [
       "<b>{client}</b>, <b>{month}</b> and <b>{agency}</b>. You can also CC your agency Gmail and include the Hinglish summary."),
     p("Team, account and activity log", H2),
     bullets([
-        "<b>Team</b>: invite colleagues (see section 12).",
+        "<b>Team</b>: invite colleagues (see section 17).",
         "<b>Log out of all devices</b>: signs you out everywhere at once, useful if you lose a phone or laptop.",
         "<b>Activity log</b> (owner only): who added clients, connected accounts, sent reports and more.",
     ]),
@@ -209,7 +242,7 @@ story += [
 
 # ---------------- 5 ----------------
 story += [
-    p("5. Add a client and connect their Google account", H1),
+    p("6. Add a client and connect their Google account", H1),
     p("Add the client", H2),
     steps([
         "Go to <b>Clients</b> and click <b>+ Add client</b>.",
@@ -234,7 +267,7 @@ story += [
 
 # ---------------- 6 ----------------
 story += [
-    p("6. Run a health check and read the results", H1),
+    p("7. Run a health check and read the results", H1),
     p("Health checks run automatically every Monday at 6:00 AM IST. To run one now, open the client and click "
       "<b>Run health check</b>. It usually takes 1-2 minutes; the page refreshes by itself."),
     p("Health score (0-100)", H2),
@@ -263,7 +296,7 @@ story += [
 
 # ---------------- 7 ----------------
 story += [
-    p("7. The weekly action plan (AI)", H1),
+    p("8. The weekly action plan (AI)", H1),
     p("After each health check the app writes a short summary and <b>exactly 5 actions</b>, numbered by priority. Each action shows:"),
     bullets([
         "<b>What to do</b> and a short description,",
@@ -277,10 +310,35 @@ story += [
          "Always review recommendations before acting on them."),
 ]
 
+# ---------------- Keywords ----------------
+story += [
+    p("9. Keyword rank tracker", H1),
+    p("Follow where the client's important searches rank on Google, week by week. Positions come from Search Console "
+      "(Google's own data), so Search Console must be connected."),
+    steps([
+        "Open the client and choose the <b>Keywords</b> tab.",
+        "Type keywords separated by commas (for example <i>dentist in kothrud, root canal pune</i>) and click <b>Track</b>, "
+        "or click a <b>suggestion</b> chip (taken from the client's top and quick-win searches), or <b>Track N suggestions</b>.",
+        "The last <b>13 weeks</b> load immediately. Click a keyword or <b>Graph</b> to see its trend.",
+        "Positions update with every Monday health check. Click <b>Check now</b> to refresh at any time.",
+    ]),
+    table([
+        ["Column", "Meaning"],
+        ["Position", "Average Google position this week (1 = top). Green = top 3, blue = page 1, amber = page 2. 'Not ranking' = no impressions this week"],
+        ["vs last week", "Green arrow up = moved up, red arrow down = moved down"],
+        ["13 weeks", "Change from the first ranked week to now"],
+        ["Best", "Best weekly position in the period"],
+        ["Clicks / Impr.", "Clicks and impressions for that keyword this week"],
+        ["Ranking page", "The page Google shows for the keyword"],
+    ], [34 * mm, 136 * mm]),
+    note("Positions are Search Console averages for a week (Sunday-Saturday), so they can differ from one manual search. "
+         "Plan limits: Free 10, Pro 25, Agency 50 keywords per client."),
+]
+
 # ---------------- 8 ----------------
 story += [
-    p("8. Monthly reports", H1),
-    p("Before the first report, connect the agency Google account in Settings (section 4)."),
+    p("10. Monthly reports", H1),
+    p("Before the first report, connect the agency Google account in Settings (section 5)."),
     p("Create and check a report", H2),
     steps([
         "Open the client and scroll to <b>Monthly reports</b>.",
@@ -301,7 +359,7 @@ story += [
 
 # ---------------- 9 ----------------
 story += [
-    p("9. Local SEO, reviews and competitors", H1),
+    p("11. Local SEO, reviews and competitors", H1),
     note("Business Profile data only works after Google approves Business Profile API access for the app. Until then the tab "
          "shows a \"not approved\" message.", "warn"),
     p("Connect Google Business Profile", H2),
@@ -325,11 +383,113 @@ story += [
         "Click <b>This is my client</b> for the client's own listing and <b>Track competitor</b> for others (up to 10).",
         "The table ranks everyone by rating. Ratings are loaded live from Google each time and are not stored.",
     ]),
+    p("Reply to reviews with AI", H2),
+    steps([
+        "Under a review, click <b>Draft reply with AI</b> (or <b>Reply</b>, then <b>Draft with AI</b>).",
+        "Choose the language (English, Hinglish or Hindi) and tone (Friendly or Professional). Click <b>Rewrite with AI</b> for another version.",
+        "Read and edit the text, then click <b>Post reply on Google</b>. Nothing is posted until you click this button.",
+    ]),
+    p("AI auto-reply to good reviews (optional, owner only)", H2),
+    p("In <b>AI auto-reply to good reviews</b> choose <b>Reply to 5-star reviews</b> or <b>Reply to 4 and 5-star reviews</b>, pick the "
+      "language and click <b>Save</b>. After each sync, AI posts a thank-you reply to new unanswered reviews from the last 30 days "
+      "(max 5 per sync). Negative reviews are never auto-replied. Auto replies are marked 'auto-replied by AI'."),
+    p("AI competitor analysis", H2),
+    p("After adding the client's own listing and at least one competitor, click <b>Analyse competitors</b>. AI reads the latest Google "
+      "reviews (up to 5 per place) and shows what customers like and dislike about each business and how the client can win. "
+      "Reviews are read live and not stored."),
+]
+
+# ---------------- Google profile editor ----------------
+story += [
+    p("12. Google profile editor and Google Posts", H1),
+    note("Changes only go live on Google for a <b>verified</b> location where you have Owner or Manager access. If the tab shows "
+         "'not verified', verify the listing at business.google.com first.", "warn"),
+    p("Improve the profile with AI", H2),
+    steps([
+        "Open the client and choose the <b>Google profile</b> tab.",
+        "Optional: type facts AI should use (services, areas served, years in business). Choose the language.",
+        "Click <b>Get AI suggestions</b>. AI prepares drafts for: business <b>description</b> (max 750 characters, no links or phone numbers), "
+        "extra <b>categories</b> (real Google categories; the primary category is never changed), <b>services</b> and yes/no "
+        "<b>attributes</b> (for example wheelchair-accessible entrance).",
+        "Each draft shows <b>Now on Google</b> and <b>New</b>. Edit the text, remove categories or services you do not want, untick "
+        "attributes that are not true. Click <b>Save edits</b> or <b>Reject</b>.",
+        "The owner clicks <b>Apply to Google</b>. The app first asks Google to validate the change, then saves it.",
+    ]),
+    table([
+        ["Status", "Meaning"],
+        ["Waiting for approval", "Draft: nothing has changed on Google yet"],
+        ["Live on Google", "The change is saved and visible"],
+        ["Google is reviewing", "Google accepted the change but checks it first (can take a few days)"],
+        ["Failed", "Google refused it; the reason is shown on the card. Fix the text and apply again"],
+        ["Undone", "The change was reverted with Undo"],
+    ], [40 * mm, 130 * mm]),
+    bullets([
+        "<b>Opening hours</b>: click <b>Change hours</b>, enter the real hours (tick Closed for days off), click <b>Prepare change</b>, then apply. AI never guesses hours.",
+        "<b>Edit description manually</b> creates a draft from the current description for you to edit.",
+        "<b>History</b> lists every change. The owner can click <b>Undo</b> to put back the previous value.",
+        "Name, address and phone are never changed from the app (changing them can trigger re-verification on Google).",
+    ]),
+    p("Google Posts", H2),
+    steps([
+        "In <b>Google Posts</b>, type a topic (for example <i>Diwali greetings</i> or <i>new teeth whitening service</i>) and click <b>Write posts</b>.",
+        "Edit each draft and choose a button (Book, Call, Learn more, Order, Shop, Sign up). Buttons other than Call need an https:// link.",
+        "The owner clicks <b>Publish now</b>, or picks a date and time and clicks <b>Schedule</b>. Scheduled posts are published within the hour.",
+        "Published posts show <b>View on Google</b> and <b>Delete from Google</b>.",
+    ]),
+    note("Do not put phone numbers in post text (Google rejects such posts). Use the Call button instead."),
+]
+
+# ---------------- AI tools ----------------
+story += [
+    p("13. AI tools: assistant, content writer, ad copy, smart alerts", H1),
+    p("Open the client and choose the <b>AI tools</b> tab. The top line shows how many AI requests you used today."),
+    p("AI SEO assistant", H2),
+    p("Ask anything about the client in English or Hinglish, for example <i>Traffic kyun gira?</i> or <i>Which keywords can reach "
+      "page 1 fastest?</i>. Click a ready-made question to start. Answers use the latest health check, keywords, reviews, Ads and "
+      "alerts. The chat is not saved; click <b>Clear</b> to start again."),
+    p("AI content writer", H2),
+    steps([
+        "Choose what to write: <b>SEO title + meta description</b>, <b>Blog outline + FAQs</b>, <b>Full blog post</b> or <b>Google Business Profile posts</b>.",
+        "Type the main keyword (tracked keywords are suggested as you type) and optional facts about the business.",
+        "Choose the language and click <b>Generate</b>. Use the <b>Copy</b> buttons. A full post can take up to a minute.",
+    ]),
+    p("AI Google Ads copy", H2),
+    p("Type the service to advertise and optional facts, then click <b>Generate ad copy</b>. You get 15 headlines (max 30 characters) "
+      "and 4 descriptions (max 90 characters) checked by the app, plus negative keywords from wasted search terms and tips when "
+      "Google Ads is connected."),
+    p("Smart alerts", H2),
+    p("Every health check compares the client with the previous period and creates an alert for big problems: Google clicks or "
+      "impressions down 30%+, website visits down 30%+, leads down 40%+, health score down 10+ points, mobile speed down 15+ points, "
+      "tracked keywords dropping (especially off page 1), new 1-2 star reviews, and Google Ads spend up 50%+ without more conversions. "
+      "AI explains the likely cause. Alerts show on the <b>Overview</b> page and the client's AI tools tab; owners also get an email "
+      "when the agency Google account is connected. The same alert is not repeated for 14 days."),
+    table([
+        ["Plan", "AI requests per day"],
+        ["Free", "30"],
+        ["Pro", "300"],
+        ["Agency", "1,500"],
+    ], [60 * mm, 60 * mm]),
+    note("AI writes drafts. Always read and edit before publishing anything. On the free Workers AI tier the daily AI budget is small; "
+         "when it runs out, AI tools show 'AI is unavailable' until the next day (the Workers Paid plan removes this limit).", "warn"),
+]
+
+# ---------------- Prospect audits ----------------
+story += [
+    p("14. Prospect audits (win new clients)", H1),
+    steps([
+        "Open <b>Prospect audits</b> from the top menu.",
+        "Type the prospect's website (for example <i>example.in</i>), the business name (optional) and the report language.",
+        "Click <b>Run audit</b>. The app checks mobile and desktop speed, page title, meta description, H1, mobile-friendliness, "
+        "structured data, image alt text, word count, sitemap.xml and robots.txt (up to a minute).",
+        "Read the audit: score, summary, issues with fixes, growth opportunities and how your agency can help.",
+        "Click <b>Download PDF</b> and choose <b>Save as PDF</b> in the print window. Send it to the prospect.",
+    ]),
+    note("Only public websites can be audited (no IP addresses or local addresses). Past audits stay in the list; delete ones you do not need."),
 ]
 
 # ---------------- 10 ----------------
 story += [
-    p("10. Google Ads, YouTube and Sheets export", H1),
+    p("15. Google Ads, YouTube and Sheets export", H1),
     p("Google Ads", H2),
     p("On the <b>Google Ads</b> tab, click <b>Connect</b>, sign in with an account that can see the client's Ads account, and choose the "
       "account. You will see spend, clicks, conversions, cost per conversion, ROAS (only if conversion values are tracked), daily "
@@ -346,32 +506,33 @@ story += [
 
 # ---------------- 11 ----------------
 story += [
-    p("11. Agency pages (top menu)", H1),
+    p("16. Agency pages and plans", H1),
     table([
         ["Page", "What it is for"],
-        ["Overview", "Agency summary: number of clients, average score, clients that need attention, recent jobs, reports waiting to be sent"],
+        ["Overview", "Agency summary: number of clients, average score, smart alerts, clients that need attention, recent jobs, reports waiting to be sent"],
         ["Clients", "All clients with score, trend arrow and status; search box; add new clients"],
         ["Local SEO", "Calls, directions, views, rating, negative and unanswered reviews for every client with Business Profile"],
         ["Advertising", "Spend, conversions, ROAS and wasted spend for every client with Google Ads"],
         ["YouTube", "Views and subscriber growth for every client with YouTube"],
+        ["Prospect audits", "Free website audits for potential clients, with Download PDF"],
         ["Reports", "All monthly reports; filter by Ready to send, Sent or Failed"],
         ["Job logs", "Every health check and report job with status and errors; Run now buttons; API usage for the last 7 days"],
-        ["Plan", "Your plan, limits and usage (clients, team members, manual runs per day)"],
+        ["Plan", "Your plan, limits and usage (clients, team members, manual runs, keywords, AI requests)"],
         ["Settings", "Branding, Google account for reports, report email, team, account, activity log"],
     ], [32 * mm, 138 * mm]),
     p("Plans", H2),
     table([
-        ["Plan", "Clients", "Team members", "Manual runs per day"],
-        ["Free", "5", "1 (owner only)", "30"],
-        ["Pro", "25", "5", "200"],
-        ["Agency", "100", "20", "1,000"],
-    ], [40 * mm, 35 * mm, 50 * mm, 45 * mm]),
+        ["Plan", "Clients", "Team members", "Manual runs/day", "Keywords/client", "AI requests/day"],
+        ["Free", "5", "1 (owner only)", "30", "10", "30"],
+        ["Pro", "25", "5", "200", "25", "300"],
+        ["Agency", "100", "20", "1,000", "50", "1,500"],
+    ], [24 * mm, 22 * mm, 32 * mm, 30 * mm, 30 * mm, 32 * mm]),
     p("Prices on the Plan page are indicative only. Online payment is not connected yet, so nothing is charged.", SMALL),
 ]
 
 # ---------------- 12 ----------------
 story += [
-    p("12. Team members", H1),
+    p("17. Team members", H1),
     p("Team members need the Pro or Agency plan (the Free plan allows only the owner)."),
     steps([
         "Owner: go to <b>Settings &gt; Team</b>, type the colleague's Gmail address and click <b>Invite</b>.",
@@ -379,17 +540,19 @@ story += [
         "The colleague opens the link and signs in with <b>the same Gmail address</b> that was invited. The link works for 7 days.",
         "Owner: open a client, click <b>Edit</b>, and choose the member under <b>Assigned team member</b>.",
     ]),
-    p("Members only see the clients assigned to them. Only the owner can change settings, invite or remove people. Removing a member "
-      "signs them out immediately and unassigns their clients."),
+    p("Members only see the clients assigned to them. Only the owner can change settings, invite or remove people, apply Google profile "
+      "changes, publish or schedule Google Posts, and turn on review auto-reply. Members can prepare drafts for the owner. Removing a "
+      "member signs them out immediately and unassigns their clients."),
     PageBreak(),
 ]
 
 # ---------------- 13 ----------------
 story += [
-    p("13. What runs automatically", H1),
+    p("18. What runs automatically", H1),
     table([
         ["When (IST)", "What happens"],
-        ["Every Monday, 6:00 AM", "Health check for every client: Search Console, Analytics, speed, plus Business Profile, reviews, Ads and YouTube if connected; new score and 5 actions"],
+        ["Every Monday, 6:00 AM", "Health check for every client: Search Console, Analytics, speed, plus Business Profile, reviews, Ads and YouTube if connected; new score and 5 actions; tracked keyword positions; smart alerts (and alert emails); review auto-replies if turned on"],
+        ["Every hour", "Scheduled Google Posts that are due are published"],
         ["1st of every month, 6:00 AM", "Monthly report for the previous month for every connected client; emailed if Auto-send is on"],
         ["Any time", "Run now from a client page or Job logs; reports can be generated with Generate preview now"],
     ], [48 * mm, 122 * mm]),
@@ -398,7 +561,7 @@ story += [
 
 # ---------------- 14 ----------------
 story += [
-    p("14. Troubleshooting", H1),
+    p("19. Troubleshooting", H1),
     table([
         ["Problem", "What to do"],
         ["\"Access blocked\" or cannot sign in", "Add the Google account under Test users in Google Cloud (Google Auth Platform > Audience)"],
@@ -407,8 +570,14 @@ story += [
         ["Client shows \"Reconnect needed\"", "Click Reconnect Google on the client page (in testing mode this happens about every 7 days)"],
         ["Report says \"Connect your agency Google account\"", "Settings > Reports: agency Google account > Connect"],
         ["Business Profile says \"not approved\"", "Google has not approved Business Profile API access yet; wait for approval"],
-        ["Competitors / sentiment say \"not configured\"", "The Places / Natural Language API key has not been added yet"],
-        ["Google Ads says \"Test access\" / not approved", "Apply for Explorer access: Google Cloud Console > Google Ads API > Overview"],
+        ["Business Profile performance 403 / 'not verified'", "Local SEO tab > Run diagnostics. Verify the location at business.google.com or pick the verified location"],
+        ["Google profile change shows Failed", "Read Google's reason on the card (for example a link in the description), edit, apply again"],
+        ["Keyword shows 'Not ranking'", "The site had no Google impressions for it that week; check spelling or pick a keyword from the suggestions"],
+        ["GA4 shows 0 sessions", "Check GA4 Realtime while opening the site; if 0, the tracking tag is missing or the wrong property is selected"],
+        ["AI tools say 'AI is unavailable'", "Try again in a minute; if it continues, the daily AI budget is used up (resets the next day)"],
+        ["'Daily limit of AI requests reached'", "Your plan's AI limit for today is used; it resets at midnight IST"],
+        ["Sentiment says \"not configured\"", "The Natural Language API key has not been added yet"],
+        ["Google Ads cannot connect", "Add the adwords scope on the Google consent screen (Data Access), then connect again"],
         ["\"Your plan allows ...\" message", "You reached a plan limit; contact the app operator to change the plan"],
         ["\"Invalid or missing CSRF token\"", "Refresh the page and try again"],
         ["A job failed", "Open Job logs, read the error, fix the cause, then click Run now"],
@@ -418,12 +587,13 @@ story += [
 
 # ---------------- 15 ----------------
 story += [
-    p("15. Good habits and security", H1),
+    p("20. Good habits and security", H1),
     bullets([
         "Never share passwords, API keys or secrets in chats or emails.",
         "Only connect Google accounts and businesses you or your clients are allowed to access, and get the client's permission "
         "before emailing them reports.",
-        "Review the AI action plan before acting on it: it is a suggestion based on data, not a guarantee.",
+        "Review everything AI writes (action plan, replies, posts, profile changes, audits) before using it: AI suggestions are not guarantees.",
+        "Turn on review auto-reply only for clients who agree to it.",
         "Check the report preview before sending, especially the first time for each client.",
         "Use <b>Log out of all devices</b> if a phone or laptop is lost.",
         "The owner can see every important action in the <b>Activity log</b>.",
