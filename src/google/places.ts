@@ -87,3 +87,39 @@ export function compareWithCompetitors(
     clientRank: clientRank === -1 ? null : clientRank + 1,
   };
 }
+
+/**
+ * Rating, review count and up to 5 review texts of a place, for the AI competitor analysis.
+ * Fetched live and never stored (Places terms). The `reviews` field is billed on a higher SKU.
+ */
+export async function getPlaceReviews(
+  apiKey: string,
+  placeId: string,
+): Promise<{
+  name: string;
+  rating: number | null;
+  userRatingCount: number | null;
+  reviews: { rating: number | null; text: string }[];
+}> {
+  if (!/^[A-Za-z0-9_-]{10,300}$/.test(placeId)) throw new Error('Invalid place ID');
+  const data = await googleRequest<{
+    displayName?: { text?: string };
+    rating?: number;
+    userRatingCount?: number;
+    reviews?: { rating?: number; text?: { text?: string }; originalText?: { text?: string } }[];
+  }>(`https://places.googleapis.com/v1/places/${placeId}`, {
+    headers: {
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'id,displayName,rating,userRatingCount,reviews',
+    },
+    retries: 1,
+  });
+  return {
+    name: data.displayName?.text ?? placeId,
+    rating: data.rating ?? null,
+    userRatingCount: data.userRatingCount ?? null,
+    reviews: (data.reviews ?? [])
+      .map((r) => ({ rating: r.rating ?? null, text: r.text?.text ?? r.originalText?.text ?? '' }))
+      .filter((r) => r.text.trim().length > 0),
+  };
+}

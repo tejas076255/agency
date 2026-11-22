@@ -7,6 +7,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { Skeleton } from '../components/Skeleton';
 import { Alert, Button, Card, inputClass } from '../components/ui';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { formatDate, formatDateTime, formatDay, formatMonth, formatNumber } from '../lib/format';
 import type { Integrations, PlaceResult, ProductState, ReviewRow } from '../lib/types';
 
@@ -327,8 +328,174 @@ export function LocalSeoTab({
         </>
       )}
       <ReviewsSection clientId={clientId} data={data} reload={reload} notify={notify} />
+      {data.gbp.connection && (
+        <AutoReplyCard clientId={clientId} data={data} reload={reload} notify={notify} />
+      )}
       <CompetitorsSection clientId={clientId} data={data} reload={reload} notify={notify} />
+      {data.config.places && data.competitors.length >= 2 && (
+        <CompetitorAiCard clientId={clientId} notify={notify} />
+      )}
     </div>
+  );
+}
+
+/** Opt-in rule: AI replies on Google to new 4-5 star reviews after each sync (owner only). */
+function AutoReplyCard({
+  clientId,
+  data,
+  reload,
+  notify,
+}: {
+  clientId: string;
+  data: Integrations;
+  reload: () => Promise<void>;
+  notify: Notify;
+}) {
+  const { me } = useAuth();
+  const isOwner = me?.user?.role === 'owner';
+  const [minStars, setMinStars] = useState<'off' | '4' | '5'>(
+    data.autoReply.minStars ? (String(data.autoReply.minStars) as '4' | '5') : 'off',
+  );
+  const [language, setLanguage] = useState(data.autoReply.language);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await api(`/api/clients/${clientId}/auto-reply`, {
+        method: 'PUT',
+        body: { minStars: minStars === 'off' ? null : Number(minStars), language },
+      });
+      notify('success', minStars === 'off' ? 'AI auto-reply turned off.' : 'AI auto-reply saved.');
+      await reload();
+    } catch (e) {
+      notify('error', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const select = 'rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm';
+  return (
+    <Card>
+      <h2 className="font-semibold">✨ AI auto-reply to good reviews</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        After each sync, AI writes and <b>posts</b> a thank-you reply on Google to new, unanswered
+        reviews (last 30 days, max 5 per sync). Negative reviews are never auto-replied: use “Draft
+        reply with AI” and check them yourself.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          className={select}
+          value={minStars}
+          onChange={(e) => setMinStars(e.target.value as 'off' | '4' | '5')}
+          disabled={!isOwner}
+          aria-label="Auto-reply rule"
+        >
+          <option value="off">Off</option>
+          <option value="5">Reply to 5-star reviews</option>
+          <option value="4">Reply to 4 and 5-star reviews</option>
+        </select>
+        <select
+          className={select}
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as 'en' | 'hinglish' | 'hi')}
+          disabled={!isOwner}
+          aria-label="Reply language"
+        >
+          <option value="en">English</option>
+          <option value="hinglish">Hinglish</option>
+          <option value="hi">Hindi</option>
+        </select>
+        <Button loading={busy} disabled={!isOwner} onClick={save}>
+          Save
+        </Button>
+        {!isOwner && (
+          <span className="text-xs text-slate-400">Only the agency owner can change this.</span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+type CompetitorAnalysis = {
+  summary: string;
+  places: { name: string; strengths: string[]; weaknesses: string[] }[];
+  opportunities: string[];
+  reviewsAnalyzed: number;
+};
+
+/** Live AI analysis of competitor reviews (fetched now from Places, never stored). */
+function CompetitorAiCard({ clientId, notify }: { clientId: string; notify: Notify }) {
+  const [language, setLanguage] = useState<'en' | 'hinglish' | 'hi'>('en');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<CompetitorAnalysis | null>(null);
+  async function run() {
+    setBusy(true);
+    try {
+      setResult(
+        await api<CompetitorAnalysis>(`/api/clients/${clientId}/competitors/ai-analysis`, {
+          method: 'POST',
+          body: { language },
+        }),
+      );
+    } catch (e) {
+      notify('error', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card>
+      <h2 className="font-semibold">✨ AI competitor analysis</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Reads the latest Google reviews of the client and each competitor (up to 5 per place) and
+        finds what customers like, what they complain about, and how the client can win. Reviews are
+        fetched live and not saved.
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <select
+          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as 'en' | 'hinglish' | 'hi')}
+          aria-label="Language"
+        >
+          <option value="en">English</option>
+          <option value="hinglish">Hinglish</option>
+          <option value="hi">Hindi</option>
+        </select>
+        <Button loading={busy} onClick={run}>
+          Analyse competitors
+        </Button>
+      </div>
+      {result && (
+        <div className="mt-4 space-y-4 text-sm">
+          <p className="text-slate-700">{result.summary}</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {result.places.map((p) => (
+              <div key={p.name} className="rounded-lg border border-slate-200 p-3">
+                <h4 className="font-medium">{p.name}</h4>
+                {p.strengths.length > 0 && (
+                  <p className="mt-1 text-green-700">👍 {p.strengths.join(' · ')}</p>
+                )}
+                {p.weaknesses.length > 0 && (
+                  <p className="mt-1 text-red-700">👎 {p.weaknesses.join(' · ')}</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <div>
+            <h4 className="font-medium">How the client can win</h4>
+            <ul className="ml-5 mt-1 list-disc text-slate-700">
+              {result.opportunities.map((o) => (
+                <li key={o}>{o}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs text-slate-400">
+            Based on {result.reviewsAnalyzed} recent reviews.
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -543,7 +710,8 @@ function ReviewItem({
       {review.comment && <p className="mt-1 text-slate-700">{review.comment}</p>}
       {review.replyComment ? (
         <p className="mt-2 rounded bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          <b>Owner reply:</b> {review.replyComment}
+          <b>Owner reply{review.autoReplied ? ' (auto-replied by AI)' : ''}:</b>{' '}
+          {review.replyComment}
         </p>
       ) : replying ? (
         <div className="mt-2 space-y-2">

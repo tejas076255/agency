@@ -13,6 +13,7 @@ import { JobsPage } from './pages/Jobs';
 import { PrivacyPage, TermsPage } from './pages/Legal';
 import { LoginPage } from './pages/Login';
 import { OnboardingPage } from './pages/Onboarding';
+import { ProspectsPage } from './pages/Prospects';
 import { ReportsPage } from './pages/Reports';
 import { SettingsPage } from './pages/Settings';
 
@@ -104,6 +105,8 @@ export function App() {
                 <Route path="/advertising" element={<AdvertisingPage />} />
                 <Route path="/youtube" element={<YouTubePage />} />
                 <Route path="/billing" element={<BillingPage />} />
+                <Route path="/prospects" element={<ProspectsPage />} />
+                <Route path="/prospects/:auditId" element={<ProspectsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

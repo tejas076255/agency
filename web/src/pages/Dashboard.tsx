@@ -6,9 +6,50 @@ import { Alert, Button, Card } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatDateTime, formatMonth } from '../lib/format';
-import type { ClientListItem, JobRun, ReportListItem } from '../lib/types';
+import type { AlertRow, ClientListItem, JobRun, ReportListItem } from '../lib/types';
+import { AlertItem } from './ClientAi';
 
 type Attention = { client: ClientListItem; reason: string; tone: 'red' | 'amber' };
+
+/** AI anomaly alerts from the weekly health checks, newest first. */
+function AlertsPanel() {
+  const [data, setData] = useState<{ alerts: AlertRow[]; unread: number } | null>(null);
+  const load = () =>
+    api<{ alerts: AlertRow[]; unread: number }>('/api/alerts')
+      .then(setData)
+      .catch(() => setData({ alerts: [], unread: 0 }));
+  useEffect(() => {
+    void load();
+  }, []);
+  if (!data || data.alerts.length === 0) return null;
+  return (
+    <Card className="p-0">
+      <div className="flex items-center justify-between gap-2 px-5 pt-5">
+        <h2 className="font-semibold">
+          ⚠ Smart alerts{' '}
+          {data.unread > 0 && (
+            <span className="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">
+              {data.unread} new
+            </span>
+          )}
+        </h2>
+        {data.unread > 0 && (
+          <button
+            className="text-xs text-[var(--brand)] hover:underline"
+            onClick={() => api('/api/alerts/read-all', { method: 'POST', body: {} }).then(load)}
+          >
+            Mark all as read
+          </button>
+        )}
+      </div>
+      <ul className="mt-3 divide-y divide-slate-100">
+        {data.alerts.slice(0, 6).map((a) => (
+          <AlertItem key={a.id} a={a} showClient />
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 /** Overview: agency-wide numbers and the things that need attention today. */
 export function DashboardPage() {
@@ -112,6 +153,8 @@ export function DashboardPage() {
         />
         <Tile label="Reports ready to send" value={String(toSend.length)} to="/reports" />
       </div>
+
+      <AlertsPanel />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

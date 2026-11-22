@@ -45,6 +45,9 @@ Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gma
 | AI fallback: rule-based 5 actions when AI fails; metric-grounding check                      | `src/lib/insights.ts`                                     |
 | Keyword rank tracker: weekly Google positions per keyword (Search Console), 13-week graph    | `src/jobs/keywords.ts`, client page → Keywords            |
 | AI review reply drafts (English / Hinglish / Hindi), edited before posting                   | `src/lib/ai.ts`, client page → Local SEO & reviews        |
+| AI tools: SEO assistant chat, content writer, Google Ads copy, smart alerts                  | `src/lib/ai-tools.ts`, client page → AI tools             |
+| AI competitor review analysis, opt-in AI auto-reply to 4-5 star reviews                      | client page → Local SEO & reviews                         |
+| Prospect audits (free website audit + PDF for lead generation)                               | `src/lib/site-audit.ts`, Prospect audits page             |
 | Privacy policy and terms pages (for the Google consent screen)                               | `web/src/pages/Legal.tsx` (`/privacy`, `/terms`)          |
 
 Times are shown in IST; numbers use Indian grouping (1,23,456).

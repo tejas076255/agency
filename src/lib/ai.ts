@@ -404,3 +404,87 @@ export async function draftReviewReply(
     return fallback(`AI call failed: ${(err as Error).message}`);
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Generic JSON task: used by the AI tools (assistant excluded). Validate with Zod + an optional
+// extra check, retry once telling the model what was wrong. The caller provides the fallback.
+// ---------------------------------------------------------------------------------------------
+
+/** Extracts a JSON object from a model answer (object, or string with text around the JSON). */
+export function extractJson(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  const text = raw.trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end <= start) return undefined;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return undefined;
+  }
+}
+
+export async function runJsonTask<T>(
+  env: Pick<Env, 'AI' | 'AI_MODEL' | 'AI_GATEWAY_ID'>,
+  task: {
+    system: string;
+    user: unknown;
+    schema: z.ZodType<T>;
+    jsonSchema: object;
+    /** Extra rule check; return an error message to reject. */
+    check?: (data: T) => string | null;
+    maxTokens?: number;
+  },
+): Promise<{ ok: true; data: T; model: string } | { ok: false; error: string }> {
+  const messages: ChatMessage[] = [
+    { role: 'system', content: task.system },
+    {
+      role: 'user',
+      content: typeof task.user === 'string' ? task.user : JSON.stringify(task.user),
+    },
+  ];
+  const parse = (raw: unknown): { ok: true; data: T } | { ok: false; error: string } => {
+    const value = extractJson(raw);
+    if (value === undefined) return { ok: false, error: 'Reply was not a JSON object' };
+    const r = task.schema.safeParse(value);
+    if (!r.success) {
+      return {
+        ok: false,
+        error: r.error.issues
+          .slice(0, 5)
+          .map((i) => `${i.path.join('.')}: ${i.message}`)
+          .join('; '),
+      };
+    }
+    const text = JSON.stringify(r.data);
+    if (GUARANTEE_RE.test(text)) return { ok: false, error: 'Do not guarantee results' };
+    const extra = task.check?.(r.data);
+    return extra ? { ok: false, error: extra } : { ok: true, data: r.data };
+  };
+  try {
+    const opts = { jsonSchema: task.jsonSchema, maxTokens: task.maxTokens ?? 1500 };
+    const first = await runModel(env, messages, opts);
+    const p1 = parse(first.output);
+    if (p1.ok) return { ok: true, data: p1.data, model: first.model };
+    const second = await runModel(
+      env,
+      [
+        ...messages,
+        {
+          role: 'assistant',
+          content: typeof first.output === 'string' ? first.output : JSON.stringify(first.output),
+        },
+        {
+          role: 'user',
+          content: `Your answer was invalid: ${p1.error}. Reply again with ONLY the corrected JSON object.`,
+        },
+      ],
+      opts,
+    );
+    const p2 = parse(second.output);
+    if (p2.ok) return { ok: true, data: p2.data, model: second.model };
+    return { ok: false, error: `AI returned invalid output twice: ${p2.error}` };
+  } catch (err) {
+    return { ok: false, error: `AI call failed: ${(err as Error).message}` };
+  }
+}

@@ -19,6 +19,8 @@ export const PLANS: Record<
     manualRunsPerDay: number;
     /** Keyword rank tracker: keywords tracked per client. */
     maxKeywordsPerClient: number;
+    /** On-demand AI requests per day (assistant, content, ad copy, audits, analyses). */
+    aiRequestsPerDay: number;
   }
 > = {
   // Prices are placeholders for planning only; nothing is charged.
@@ -29,6 +31,7 @@ export const PLANS: Record<
     maxMembers: 1,
     manualRunsPerDay: 30,
     maxKeywordsPerClient: 10,
+    aiRequestsPerDay: 30,
   },
   pro: {
     name: 'Pro',
@@ -37,6 +40,7 @@ export const PLANS: Record<
     maxMembers: 5,
     manualRunsPerDay: 200,
     maxKeywordsPerClient: 25,
+    aiRequestsPerDay: 300,
   },
   agency: {
     name: 'Agency',
@@ -45,6 +49,7 @@ export const PLANS: Record<
     maxMembers: 20,
     manualRunsPerDay: 1000,
     maxKeywordsPerClient: 50,
+    aiRequestsPerDay: 1500,
   },
 };
 
@@ -130,4 +135,24 @@ export async function assertManualRunAllowed(env: Pick<Env, 'DB'>, agencyId: str
       `Daily limit of ${limits.manualRunsPerDay} manual runs reached. Scheduled jobs still run.`,
     );
   }
+}
+
+const aiQuotaKey = (agencyId: string, now: number) => `aiq:${agencyId}:${istDate(now)}`;
+
+/** AI requests used today (IST) by the agency. KV counter: a soft limit, good enough for cost control. */
+export async function aiRequestsToday(env: Pick<Env, 'KV'>, agencyId: string, now = Date.now()) {
+  return Number((await env.KV.get(aiQuotaKey(agencyId, now))) ?? '0');
+}
+
+/** Counts one on-demand AI request; HTTP 402 when the plan's daily AI limit is reached. */
+export async function useAiQuota(env: Pick<Env, 'DB' | 'KV'>, agencyId: string, now = Date.now()) {
+  const { limits } = await getPlanUsage(env, agencyId, now);
+  const used = await aiRequestsToday(env, agencyId, now);
+  if (used >= limits.aiRequestsPerDay) {
+    limitError(
+      `Daily limit of ${limits.aiRequestsPerDay} AI requests reached on the ${limits.name} plan. It resets at midnight IST.`,
+    );
+  }
+  await env.KV.put(aiQuotaKey(agencyId, now), String(used + 1), { expirationTtl: 2 * 86_400 });
+  return { used: used + 1, limit: limits.aiRequestsPerDay };
 }

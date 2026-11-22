@@ -11,6 +11,7 @@ import { getDb } from '../lib/db';
 import { buildCompactSummary } from '../lib/insights';
 import { reviewStats, syncIntegrations } from './integrations';
 import { syncKeywordRankings } from './keywords';
+import { runAlerts } from './alerts';
 import { log } from '../lib/log';
 import { computeHealthScore } from '../lib/score';
 
@@ -212,6 +213,9 @@ export async function runHealthCheck(
         .where(and(eq(healthChecks.id, healthCheckId), eq(healthChecks.agencyId, agencyId)));
     }
   }
+
+  // AI anomaly alerts (compares with the previous check; never throws).
+  if (succeeded > 0) await runAlerts(env, agencyId, client, healthCheckId, now);
 
   return {
     healthCheckId,

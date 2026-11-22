@@ -275,6 +275,8 @@ describe('integrations sync with mocked Google', () => {
       gbpLocationName: 'locations/11',
       adsCustomerId: null,
       youtubeChannelId: null,
+      autoReplyMinStars: null,
+      autoReplyLanguage: 'en' as const,
       createdAt: 0,
       updatedAt: 0,
     });
@@ -345,6 +347,8 @@ describe('integrations sync with mocked Google', () => {
       gbpLocationName: 'locations/11',
       adsCustomerId: null,
       youtubeChannelId: null,
+      autoReplyMinStars: null,
+      autoReplyLanguage: 'en' as const,
       createdAt: 0,
       updatedAt: 0,
     });
@@ -373,6 +377,8 @@ describe('integrations sync with mocked Google', () => {
       gbpLocationName: 'locations/11',
       adsCustomerId: null,
       youtubeChannelId: null,
+      autoReplyMinStars: null,
+      autoReplyLanguage: 'en' as const,
       createdAt: 0,
       updatedAt: 0,
     });

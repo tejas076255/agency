@@ -335,6 +335,7 @@ export type ReviewRow = {
   comment: string | null;
   reviewCreatedAt: number | null;
   replyComment: string | null;
+  autoReplied?: boolean;
   label: 'positive' | 'neutral' | 'negative' | null;
   sentimentScore: number | null;
   entities: string[];
@@ -349,6 +350,7 @@ export type Integrations = {
   gbp: ProductState<GbpData>;
   ads: ProductState<AdsData>;
   youtube: ProductState<YouTubeData>;
+  autoReply: { minStars: 4 | 5 | null; language: 'en' | 'hinglish' | 'hi' };
   reviews: {
     stats: {
       recent30: number;
@@ -442,6 +444,7 @@ export type Billing = {
     maxMembers: number;
     manualRunsPerDay: number;
     maxKeywordsPerClient: number;
+    aiRequestsPerDay: number;
   };
   usage: { clients: number; members: number; pendingInvites: number; manualRunsToday: number };
   plans: Record<
@@ -453,6 +456,7 @@ export type Billing = {
       maxMembers: number;
       manualRunsPerDay: number;
       maxKeywordsPerClient: number;
+      aiRequestsPerDay: number;
     }
   >;
   paymentsEnabled: boolean;
@@ -485,4 +489,72 @@ export type KeywordsResponse = {
   suggestions: { keyword: string; position: number; impressions: number }[];
   notReady: string | null;
   limit: number;
+};
+
+// ------------------------------- AI features -------------------------------
+
+export type AiLanguage = 'en' | 'hinglish' | 'hi';
+
+export type AlertRow = {
+  id: string;
+  clientId: string;
+  clientName?: string;
+  kind: string;
+  severity: 'high' | 'medium';
+  title: string;
+  explanation: string | null;
+  explanationSource: 'ai' | 'fallback' | null;
+  emailed: boolean;
+  read: boolean;
+  createdAt: number;
+};
+
+export type SiteChecks = {
+  url: string;
+  finalUrl: string | null;
+  fetchError: string | null;
+  https: boolean;
+  statusCode: number | null;
+  responseMs: number | null;
+  htmlKb: number | null;
+  title: string | null;
+  metaDescription: string | null;
+  h1: string[];
+  canonical: string | null;
+  viewport: boolean;
+  lang: string | null;
+  openGraph: boolean;
+  schemaTypes: string[];
+  images: number;
+  imagesMissingAlt: number;
+  wordCount: number;
+  internalLinks: number;
+  robotsTxt: boolean | null;
+  sitemap: boolean | null;
+  mobileScore: number | null;
+  desktopScore: number | null;
+  mobileLcpMs: number | null;
+  cwvPassed: boolean | null;
+  speedFixes: string[];
+  score?: number;
+};
+
+export type AuditReport = {
+  summary: string;
+  issues: { title: string; severity: 'high' | 'medium' | 'low'; detail: string; fix: string }[];
+  opportunities: string[];
+  pitch: string;
+};
+
+export type ProspectAudit = {
+  id: string;
+  url: string;
+  businessName: string | null;
+  status: 'ready' | 'failed';
+  checks: SiteChecks | null;
+  report: AuditReport | null;
+  reportSource: 'ai' | 'fallback' | null;
+  error: string | null;
+  createdAt: number;
+  score?: number | null;
 };

@@ -47,6 +47,26 @@ real data from Google yet, so field-level surprises are possible.
 | Keyword rank tracker   | ✅ Agency tracks keywords per client (plan limit 10 / 25 / 50). 13 weeks of weekly Search Console positions load on add; refreshed by every weekly health check and "Check now". Suggestions from top + quick-win queries. Code: `src/jobs/keywords.ts`, `src/routes/keywords.ts`, `web/src/pages/ClientKeywords.tsx`. Mock-tested |
 | AI review reply drafts | ✅ "Draft reply with AI" on each review (English / Hinglish / Hindi, friendly / professional). Validated (no placeholders, promises or refunds), retry once, rule-based fallback. Draft is only shown for editing, never auto-posted or stored. Code: `draftReviewReply` in `src/lib/ai.ts`. Mock-tested                           |
 
+## AI features
+
+All on-demand AI calls count towards a daily plan limit (Free 30 / Pro 300 / Agency 1500, KV
+counter, HTTP 402 when reached). Every tool validates the model output (Zod + rules) and retries
+once; tools with a sensible template fall back to it, the others return 503 instead of fake output.
+Mock-tested (`test/ai-features.test.ts`); not yet tried against live client data.
+
+| Feature                | What it does                                                                                                                                                                                                                                                                         | Code                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| AI SEO assistant       | Chat per client (client page → AI tools) answering from the latest health check, keywords, reviews, ads and alerts. Not stored                                                                                                                                                       | `assistantReply`, `src/jobs/client-context.ts`         |
+| AI content writer      | SEO titles + meta descriptions, blog outline + FAQ, full blog post, Google Business Profile posts (English / Hinglish / Hindi)                                                                                                                                                       | `generateContent`                                      |
+| AI Google Ads copy     | 15 headlines (≤30 chars) + 4 descriptions (≤90), enforced in code; negative keywords from wasted search terms                                                                                                                                                                        | `generateAdCopy`, `enforceAdLimits`                    |
+| Smart alerts           | After each health check: clicks / impressions / visits / leads drops, score and speed drops, keywords falling (off page 1), negative reviews, Ads overspend. Deduped for 14 days, AI explanation (rule-based fallback), Dashboard + client tab, email to owners via the agency Gmail | `src/jobs/alerts.ts`                                   |
+| AI competitor analysis | Live Places reviews (≤5 per place, never stored) → strengths, weaknesses and opportunities                                                                                                                                                                                           | `analyzeCompetitors`, `getPlaceReviews`                |
+| Prospect audits        | Any public website → measured checks (PageSpeed, title/meta/H1, viewport, schema, alt text, sitemap, robots) → AI write-up + score, branded page with "Download PDF" (browser print). SSRF-safe fetch: public domains only, every redirect re-checked, size/time limits              | `src/lib/site-audit.ts`, `web/src/pages/Prospects.tsx` |
+| AI review auto-reply   | Opt-in per client (owner only): 5-star or 4-5-star reviews from the last 30 days, max 5 per sync, audit-logged, marked "auto-replied by AI". Negative reviews are never auto-replied                                                                                                 | `autoReplyReviews`                                     |
+
+Not built: **WhatsApp bot** (needs a Meta WhatsApp Business account and approved message templates).
+The monthly report already had an AI summary (English + Hinglish) before this.
+
 ## Phase 4
 
 - ✅ 4A Subscription architecture: `agencies.plan` (free / pro / agency)

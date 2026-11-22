@@ -9,6 +9,7 @@ const navItems = [
   { to: '/local-seo', label: 'Local SEO' },
   { to: '/advertising', label: 'Advertising' },
   { to: '/youtube', label: 'YouTube' },
+  { to: '/prospects', label: 'Prospect audits' },
   { to: '/reports', label: 'Reports' },
   { to: '/jobs', label: 'Job logs' },
   { to: '/billing', label: 'Plan' },
@@ -35,7 +36,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
+      <header className="print:hidden sticky top-0 z-10 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
           <div className="flex min-w-0 items-center gap-3">
             {agency?.logoUrl ? (

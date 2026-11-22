@@ -86,6 +86,11 @@ export const clients = sqliteTable(
     gbpLocationName: text('gbp_location_name'), // "locations/456"
     adsCustomerId: text('ads_customer_id'), // "1234567890" (no dashes)
     youtubeChannelId: text('youtube_channel_id'),
+    // AI auto-reply to Google reviews: null = off, 4 or 5 = reply to reviews with >= this many stars.
+    autoReplyMinStars: integer('auto_reply_min_stars'),
+    autoReplyLanguage: text('auto_reply_language', { enum: ['en', 'hinglish', 'hi'] })
+      .notNull()
+      .default('en'),
     createdAt: createdAt(),
     updatedAt: integer('updated_at').notNull(),
   },
@@ -344,6 +349,8 @@ export const reviews = sqliteTable(
     reviewCreatedAt: integer('review_created_at'),
     replyComment: text('reply_comment'),
     replyUpdatedAt: integer('reply_updated_at'),
+    /** The reply was posted automatically by the AI auto-reply rule. */
+    autoReplied: integer('auto_replied', { mode: 'boolean' }).notNull().default(false),
     syncedAt: integer('synced_at').notNull(),
   },
   (t) => [
@@ -483,4 +490,59 @@ export const keywordRankings = sqliteTable(
     topPage: text('top_page'),
   },
   (t) => [uniqueIndex('kw_rank_keyword_period_uq').on(t.keywordId, t.periodEnd)],
+);
+
+// ------------------------------- AI features -------------------------------
+
+/** Anomaly alerts found by the weekly health check (with an AI-written explanation). */
+export const alerts = sqliteTable(
+  'alerts',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    healthCheckId: text('health_check_id').references(() => healthChecks.id, {
+      onDelete: 'set null',
+    }),
+    kind: text('kind').notNull(), // e.g. "clicks_drop", "keyword_drop", "negative_reviews"
+    severity: text('severity', { enum: ['high', 'medium'] }).notNull(),
+    title: text('title').notNull(),
+    detailsJson: text('details_json'),
+    explanation: text('explanation'),
+    explanationSource: text('explanation_source', { enum: ['ai', 'fallback'] }),
+    emailedAt: integer('emailed_at'),
+    readAt: integer('read_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('alerts_agency_created_idx').on(t.agencyId, t.createdAt),
+    index('alerts_client_idx').on(t.clientId, t.createdAt),
+  ],
+);
+
+/** Free website audits for prospects (lead generation), written up by AI. */
+export const prospectAudits = sqliteTable(
+  'prospect_audits',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    url: text('url').notNull(),
+    businessName: text('business_name'),
+    status: text('status', { enum: ['ready', 'failed'] }).notNull(),
+    checksJson: text('checks_json'), // measured facts (PageSpeed + on-page checks)
+    reportJson: text('report_json'), // AI write-up
+    reportSource: text('report_source', { enum: ['ai', 'fallback'] }),
+    error: text('error'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('prospect_agency_idx').on(t.agencyId, t.createdAt)],
 );

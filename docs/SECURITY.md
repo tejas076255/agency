@@ -92,4 +92,10 @@ Share links use a 192-bit random token (`/r/:token`), are read-only, `noindex`, 
   text; exports label AI-derived columns.
 - **Review replies** are posted only on an explicit user action and are audited (`review.reply`).
 - **Tenant isolation** for all new routes is covered by `test/phase2-3-api.test.ts`.
+- Prospect audits fetch third-party websites from the Worker: only public domain names (no IPs,
+  localhost or internal TLDs, no custom ports or credentials), every redirect hop is re-validated,
+  max 4 redirects, 12 s timeout, 1.5 MB body cap (`src/lib/site-audit.ts`).
+- AI prompts treat review texts, agency notes and website content as data, not instructions. AI
+  output is validated before use; review auto-replies are opt-in (owner only), limited to 4-5 star
+  reviews and audit-logged.
 - `PLACES_API_KEY` and `NATURAL_LANGUAGE_API_KEY` are Worker secrets, never sent to the browser. Google Ads uses only the OAuth token (no developer token).

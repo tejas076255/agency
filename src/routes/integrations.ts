@@ -88,6 +88,7 @@ integrationRoutes.get('/:id/integrations', async (c) => {
       comment: reviews.comment,
       reviewCreatedAt: reviews.reviewCreatedAt,
       replyComment: reviews.replyComment,
+      autoReplied: reviews.autoReplied,
       label: reviewSentiments.label,
       score: reviewSentiments.score,
       entitiesJson: reviewSentiments.entitiesJson,
@@ -138,6 +139,7 @@ integrationRoutes.get('/:id/integrations', async (c) => {
     gbp: await product('gbp', client.gbpLocationName),
     ads: await product('ads', client.adsCustomerId),
     youtube: await product('youtube', client.youtubeChannelId),
+    autoReply: { minStars: client.autoReplyMinStars, language: client.autoReplyLanguage },
     reviews: {
       stats: await reviewStats(c.env, agencyId, client.id),
       sentimentCounts,

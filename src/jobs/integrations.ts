@@ -1,11 +1,12 @@
 // Phase 2/3 data sync for one client: Business Profile (+ reviews + sentiment), Google Ads, YouTube.
 // Each product is independent: a failure is recorded on its own snapshot and never blocks others.
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull } from 'drizzle-orm';
 import { clients, integrationSnapshots, reviews, reviewSentiments } from '../db/schema';
 import type { Env } from '../env';
 import { fetchAdsSummary, type AdsSummary } from '../google/ads';
 import {
   fetchGbpSummary,
+  replyToReview,
   describeGbpFailures,
   GbpSyncError,
   originalReviewText,
@@ -18,6 +19,8 @@ import { describeError, GoogleApiError } from '../google/http';
 import { analyzeReviewText } from '../google/language';
 import { fetchYouTubeSummary, type YouTubeSummary } from '../google/youtube';
 import { getConnection, withAccessToken } from '../google/tokens';
+import { draftReviewReply } from '../lib/ai';
+import { audit } from '../lib/audit';
 import { getDb } from '../lib/db';
 import { log } from '../lib/log';
 
@@ -202,6 +205,63 @@ export async function syncYouTube(env: Env, c: Client): Promise<YouTubeSummary |
   return withAccessToken(env, conn, (token) => fetchYouTubeSummary(token, channelId));
 }
 
+export const AUTO_REPLY_MAX_PER_RUN = 5;
+export const AUTO_REPLY_MAX_AGE_MS = 30 * 86_400_000;
+
+/**
+ * AI auto-reply rule (opt-in per client): replies on Google to recent, unanswered reviews with at
+ * least `autoReplyMinStars` stars (4 or 5 only). Max 5 per sync; each reply is audit-logged.
+ */
+export async function autoReplyReviews(env: Env, c: Client, now = Date.now()): Promise<number> {
+  const min = c.autoReplyMinStars;
+  if (!min || min < 4) return 0;
+  const conn = await getConnection(env, c.agencyId, 'client_business', c.id);
+  if (!conn) return 0;
+  const db = getDb(env);
+  const pending = await db
+    .select()
+    .from(reviews)
+    .where(
+      and(
+        eq(reviews.agencyId, c.agencyId),
+        eq(reviews.clientId, c.id),
+        isNull(reviews.replyComment),
+        gte(reviews.starRating, min),
+        gte(reviews.reviewCreatedAt, now - AUTO_REPLY_MAX_AGE_MS),
+      ),
+    )
+    .orderBy(desc(reviews.reviewCreatedAt))
+    .limit(AUTO_REPLY_MAX_PER_RUN);
+  let done = 0;
+  for (const r of pending) {
+    const draft = await draftReviewReply(env, {
+      businessName: c.name,
+      reviewerName: r.reviewerName,
+      starRating: r.starRating,
+      comment: r.comment,
+      tone: 'friendly',
+      language: c.autoReplyLanguage,
+    });
+    await withAccessToken(env, conn, (token) =>
+      replyToReview(token, r.googleReviewName, draft.reply),
+    );
+    await db
+      .update(reviews)
+      .set({ replyComment: draft.reply, replyUpdatedAt: Date.now(), autoReplied: true })
+      .where(and(eq(reviews.id, r.id), eq(reviews.agencyId, c.agencyId)));
+    await audit(env, {
+      agencyId: c.agencyId,
+      userId: null,
+      action: 'review.auto_reply',
+      targetType: 'review',
+      targetId: r.id,
+      metadata: { stars: r.starRating, source: draft.source },
+    });
+    done++;
+  }
+  return done;
+}
+
 /** Syncs every configured product for the client. Never throws. */
 export async function syncIntegrations(env: Env, c: Client): Promise<IntegrationResults> {
   const out: IntegrationResults = { gbp: null, ads: null, youtube: null, errors: {} };
@@ -242,6 +302,13 @@ export async function syncIntegrations(env: Env, c: Client): Promise<Integration
       }
     }),
   );
+  if (out.gbp) {
+    try {
+      await autoReplyReviews(env, c);
+    } catch (err) {
+      log.warn('Review auto-reply failed', err, { clientId: c.id });
+    }
+  }
   try {
     await analyzePendingReviews(env, c);
   } catch (err) {

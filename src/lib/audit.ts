@@ -36,7 +36,11 @@ export type AuditAction =
   | 'team.invite_revoke'
   | 'team.member_remove'
   | 'keyword.add'
-  | 'keyword.remove';
+  | 'keyword.remove'
+  | 'review.auto_reply'
+  | 'review.auto_reply_settings'
+  | 'prospect.audit'
+  | 'prospect.delete';
 
 export type AuditEntry = {
   agencyId: string | null;

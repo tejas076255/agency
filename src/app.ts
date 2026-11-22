@@ -8,6 +8,7 @@ import { authRoutes } from './routes/auth';
 import { actionItemRoutes, clientRoutes } from './routes/clients';
 import { channelRoutes, integrationRoutes } from './routes/integrations';
 import { keywordRoutes } from './routes/keywords';
+import { aiClientRoutes, aiUsageRoutes, alertRoutes, prospectRoutes } from './routes/ai';
 import { meRoutes } from './routes/me';
 import { billingRoutes, teamRoutes } from './routes/team';
 import { publicRoutes } from './routes/public';
@@ -37,6 +38,10 @@ app.route('/api/agency', agencyRoutes);
 app.route('/api/clients', clientRoutes);
 app.route('/api/clients', integrationRoutes); // Phase 2/3 per-client integrations
 app.route('/api/clients', keywordRoutes); // keyword rank tracker
+app.route('/api/clients', aiClientRoutes); // AI tools per client
+app.route('/api/alerts', alertRoutes);
+app.route('/api/prospects', prospectRoutes);
+app.route('/api/ai', aiUsageRoutes);
 app.route('/api/channels', channelRoutes);
 app.route('/api/team', teamRoutes);
 app.route('/api/billing', billingRoutes);
