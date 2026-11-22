@@ -5,6 +5,7 @@ import { TrendChart } from '../components/charts';
 import { AdsTab, ExportsTab, LocalSeoTab, useIntegrations, YouTubeTab } from './ClientChannels';
 import { KeywordsTab } from './ClientKeywords';
 import { AiTab } from './ClientAi';
+import { GbpEditorTab } from './ClientGbpEditor';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DetailSkeleton, Skeleton } from '../components/Skeleton';
 import { Alert, Button, Card, inputClass } from '../components/ui';
@@ -140,7 +141,10 @@ export function ClientDetailPage() {
       {tab === 'ai' && (
         <AiTab clientId={client.id} notify={(kind, text) => setNotice({ kind, text })} />
       )}
-      {tab !== 'overview' && tab !== 'keywords' && tab !== 'ai' && (
+      {tab === 'profile' && (
+        <GbpEditorTab clientId={client.id} notify={(kind, text) => setNotice({ kind, text })} />
+      )}
+      {tab !== 'overview' && tab !== 'keywords' && tab !== 'ai' && tab !== 'profile' && (
         <ChannelPanel
           tab={tab}
           clientId={client.id}
@@ -384,11 +388,12 @@ export function ClientDetailPage() {
   );
 }
 
-type Tab = 'overview' | 'keywords' | 'ai' | 'local' | 'ads' | 'youtube' | 'exports';
+type Tab = 'overview' | 'keywords' | 'ai' | 'profile' | 'local' | 'ads' | 'youtube' | 'exports';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'keywords', label: 'Keywords' },
   { id: 'ai', label: '✨ AI tools' },
+  { id: 'profile', label: 'Google profile' },
   { id: 'local', label: 'Local SEO & reviews' },
   { id: 'ads', label: 'Google Ads' },
   { id: 'youtube', label: 'YouTube' },
@@ -426,7 +431,7 @@ function ChannelPanel({
   clientId,
   notify,
 }: {
-  tab: Exclude<Tab, 'overview' | 'keywords' | 'ai'>;
+  tab: Exclude<Tab, 'overview' | 'keywords' | 'ai' | 'profile'>;
   clientId: string;
   notify: (kind: Notice['kind'], text: string) => void;
 }) {

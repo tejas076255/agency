@@ -64,6 +64,26 @@ Mock-tested (`test/ai-features.test.ts`); not yet tried against live client data
 | Prospect audits        | Any public website → measured checks (PageSpeed, title/meta/H1, viewport, schema, alt text, sitemap, robots) → AI write-up + score, branded page with "Download PDF" (browser print). SSRF-safe fetch: public domains only, every redirect re-checked, size/time limits              | `src/lib/site-audit.ts`, `web/src/pages/Prospects.tsx` |
 | AI review auto-reply   | Opt-in per client (owner only): 5-star or 4-5-star reviews from the last 30 days, max 5 per sync, audit-logged, marked "auto-replied by AI". Negative reviews are never auto-replied                                                                                                 | `autoReplyReviews`                                     |
 
+### Business Profile editing (AI suggest → approve → apply)
+
+Client page → **Google profile** tab (`src/jobs/gbp-edit.ts`, `src/google/business-edit.ts`,
+`web/src/pages/ClientGbpEditor.tsx`). Mock-tested (`test/gbp-edit.test.ts`); not yet tried on a
+live, verified listing.
+
+- AI suggests a description (≤750 chars, no links/phones), extra categories (looked up in Google's
+  category list, never the primary), services (free-form, under the primary category) and yes/no
+  attributes (only ones Google offers for the listing). Opening hours are entered manually.
+- Every suggestion is a draft with before/after; anyone can edit drafts, **only the owner applies**.
+- Apply = `PATCH …?validateOnly=true` first, then the real PATCH (no automatic retries); status is
+  "Live on Google", "Google is reviewing" (`metadata.hasPendingEdits`) or "Failed" with Google's
+  error. Applied changes can be **undone** (the saved "before" is applied as a new audited change).
+- Name, address and phone are never edited from the app.
+- **Google Posts**: AI drafts (no phone numbers, button links must be https), edit, publish now or
+  schedule; hourly cron `15 * * * *` publishes due posts (claimed atomically so nothing is posted
+  twice); published posts can be deleted from Google.
+- Needs a verified location (owner control) and Business Profile API access; unverified listings
+  show a warning.
+
 Not built: **WhatsApp bot** (needs a Meta WhatsApp Business account and approved message templates).
 The monthly report already had an AI summary (English + Hinglish) before this.
 

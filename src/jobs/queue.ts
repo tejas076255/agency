@@ -1,4 +1,5 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
+import { publishDuePosts } from './gbp-edit';
 import { clients, jobRuns } from '../db/schema';
 import type { Env, JobMessage } from '../env';
 import { describeError, GoogleApiError, ReconnectNeededError } from '../google/http';
@@ -11,6 +12,7 @@ import { generateReport } from './report';
 
 export const CRON_WEEKLY_HEALTH = '30 0 * * 1'; // Monday 06:00 IST
 export const CRON_MONTHLY_REPORT = '30 0 1 * *'; // 1st of month 06:00 IST
+export const CRON_GBP_POSTS = '15 * * * *'; // hourly: publish scheduled Google posts
 export const DLQ_NAME = 'agency-jobs-dlq';
 const MAX_ATTEMPTS = 3;
 const STALE_RUNNING_MS = 20 * 60 * 1000;
@@ -88,6 +90,10 @@ export async function enqueueJobs(env: Env, jobs: JobRequest[]): Promise<string[
 /** Cron entry point: fan out one queue message per client. Safe to run twice (dedupe keys). */
 export async function handleCron(cron: string, env: Env, now = Date.now()) {
   const db = getDb(env);
+  if (cron === CRON_GBP_POSTS) {
+    await publishDuePosts(env, now);
+    return;
+  }
   if (cron === CRON_MONTHLY_REPORT) {
     // Report on the month that just ended. Clients with auto-send get it emailed;
     // others get a ready-to-review report ("Preview & send manually").

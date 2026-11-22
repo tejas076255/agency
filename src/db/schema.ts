@@ -546,3 +546,81 @@ export const prospectAudits = sqliteTable(
   },
   (t) => [index('prospect_agency_idx').on(t.agencyId, t.createdAt)],
 );
+
+// ------------------------------- Business Profile editing -------------------------------
+
+/**
+ * A proposed or applied change to a client's Google Business Profile (AI suggestion or manual).
+ * before/after hold the EditableProfile slice for `kind`, so every applied change can be undone.
+ */
+export const gbpChanges = sqliteTable(
+  'gbp_changes',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    locationName: text('location_name').notNull(),
+    kind: text('kind', {
+      enum: ['description', 'categories', 'services', 'hours', 'attributes'],
+    }).notNull(),
+    source: text('source', { enum: ['ai', 'manual', 'undo'] }).notNull(),
+    status: text('status', {
+      enum: ['draft', 'applied', 'pending_google', 'failed', 'rejected', 'reverted'],
+    }).notNull(),
+    reason: text('reason'),
+    beforeJson: text('before_json'),
+    afterJson: text('after_json').notNull(),
+    error: text('error'),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    appliedByUserId: text('applied_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    appliedAt: integer('applied_at'),
+    revertsChangeId: text('reverts_change_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('gbp_changes_client_idx').on(t.clientId, t.createdAt)],
+);
+
+/** Google Business Profile posts: AI/manual drafts, scheduled and published posts. */
+export const gbpPosts = sqliteTable(
+  'gbp_posts',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    summary: text('summary').notNull(),
+    actionType: text('action_type'), // LEARN_MORE, CALL, BOOK, ORDER, SHOP, SIGN_UP
+    actionUrl: text('action_url'),
+    source: text('source', { enum: ['ai', 'manual'] }).notNull(),
+    status: text('status', {
+      enum: ['draft', 'scheduled', 'publishing', 'published', 'failed', 'deleted'],
+    }).notNull(),
+    scheduledFor: integer('scheduled_for'),
+    googlePostName: text('google_post_name'),
+    searchUrl: text('search_url'),
+    error: text('error'),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedByUserId: text('approved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    publishedAt: integer('published_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('gbp_posts_client_idx').on(t.clientId, t.createdAt),
+    index('gbp_posts_due_idx').on(t.status, t.scheduledFor),
+  ],
+);

@@ -37,7 +37,7 @@ works and deploys; the same separation exists at folder level:
 
 ## Background jobs
 
-1. Cron (`30 0 * * 1` Monday 06:00 IST, `30 0 1 * *` 1st 06:00 IST) selects clients and calls `enqueueJobs`.
+1. Cron (`30 0 * * 1` Monday 06:00 IST, `30 0 1 * *` 1st 06:00 IST) selects clients and calls `enqueueJobs`. The hourly `15 * * * *` cron only publishes due Google posts (`publishDuePosts`).
 2. Each job gets a `job_runs` row with a **dedupe key** (`health_check:<client>:<ISO week>`,
    `monthly_report:<client>:<YYYY-MM>`), unique in D1 → a cron firing twice can't double-queue.
 3. One queue message per client (`max_concurrency: 5`). The consumer skips messages whose job already

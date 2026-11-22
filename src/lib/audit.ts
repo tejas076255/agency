@@ -40,7 +40,13 @@ export type AuditAction =
   | 'review.auto_reply'
   | 'review.auto_reply_settings'
   | 'prospect.audit'
-  | 'prospect.delete';
+  | 'prospect.delete'
+  | 'gbp.change_create'
+  | 'gbp.change_apply'
+  | 'gbp.change_reject'
+  | 'gbp.post_publish'
+  | 'gbp.post_schedule'
+  | 'gbp.post_delete';
 
 export type AuditEntry = {
   agencyId: string | null;

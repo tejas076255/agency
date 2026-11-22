@@ -24,31 +24,32 @@ Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gma
 
 ## Features (Phase 1)
 
-| Feature                                                                                      | Where                                                     |
-| -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Sign in with Google (OIDC + PKCE + state + nonce), Turnstile on login                        | `src/routes/auth.ts`                                      |
-| Agency onboarding: name, brand color, logo (stored in D1)                                    | `src/routes/agency.ts`, `web/src/pages/Onboarding.tsx`    |
-| Clients CRUD, "Connect Google", pick Search Console site + GA4 property                      | `src/routes/clients.ts`, `web/src/pages/ClientDetail.tsx` |
-| Weekly health check: Cron → Queue → one message per client                                   | `src/jobs/queue.ts`, `src/jobs/health-check.ts`           |
-| Search Console: 28d vs previous 28d, top queries, quick wins (pos. 8-20), dropping pages     | `src/google/gsc.ts`                                       |
-| GA4: sessions, users, key events, engagement, channels, landing pages                        | `src/google/ga4.ts`                                       |
-| PageSpeed: mobile + desktop score, LCP, CLS, INP, top 3 fixes                                | `src/google/pagespeed.ts`                                 |
-| Health score 0-100 (formula below)                                                           | `src/lib/score.ts`                                        |
-| AI insights: summary + exactly 5 prioritized actions + Hinglish, Zod-validated, 1 retry      | `src/lib/ai.ts`                                           |
-| Dashboard with scores, trend arrows, "Reconnect needed" flags                                | `web/src/pages/Dashboard.tsx`                             |
-| Client page: charts (clicks, sessions, speed), action items with "done" checkbox             | `web/src/pages/ClientDetail.tsx`                          |
-| Monthly report: Slides template → fill → PDF (stored in KV) → Gmail → share link `/r/:token` | `src/jobs/report.ts`, `src/routes/public.ts`              |
-| "Preview & send manually" or auto-send per client                                            | Client page → Monthly reports                             |
-| Job logs with errors + "Run now"                                                             | `web/src/pages/Jobs.tsx`                                  |
-| Edit report in Google Slides → "Re-export PDF"; report email settings (subject, message, CC) | `src/jobs/report.ts`, `web/src/pages/Settings.tsx`        |
-| Audit log, API usage (quota) tracking, logout from all devices                               | `src/lib/audit.ts`, `src/lib/usage.ts`                    |
-| AI fallback: rule-based 5 actions when AI fails; metric-grounding check                      | `src/lib/insights.ts`                                     |
-| Keyword rank tracker: weekly Google positions per keyword (Search Console), 13-week graph    | `src/jobs/keywords.ts`, client page → Keywords            |
-| AI review reply drafts (English / Hinglish / Hindi), edited before posting                   | `src/lib/ai.ts`, client page → Local SEO & reviews        |
-| AI tools: SEO assistant chat, content writer, Google Ads copy, smart alerts                  | `src/lib/ai-tools.ts`, client page → AI tools             |
-| AI competitor review analysis, opt-in AI auto-reply to 4-5 star reviews                      | client page → Local SEO & reviews                         |
-| Prospect audits (free website audit + PDF for lead generation)                               | `src/lib/site-audit.ts`, Prospect audits page             |
-| Privacy policy and terms pages (for the Google consent screen)                               | `web/src/pages/Legal.tsx` (`/privacy`, `/terms`)          |
+| Feature                                                                                         | Where                                                     |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Sign in with Google (OIDC + PKCE + state + nonce), Turnstile on login                           | `src/routes/auth.ts`                                      |
+| Agency onboarding: name, brand color, logo (stored in D1)                                       | `src/routes/agency.ts`, `web/src/pages/Onboarding.tsx`    |
+| Clients CRUD, "Connect Google", pick Search Console site + GA4 property                         | `src/routes/clients.ts`, `web/src/pages/ClientDetail.tsx` |
+| Weekly health check: Cron → Queue → one message per client                                      | `src/jobs/queue.ts`, `src/jobs/health-check.ts`           |
+| Search Console: 28d vs previous 28d, top queries, quick wins (pos. 8-20), dropping pages        | `src/google/gsc.ts`                                       |
+| GA4: sessions, users, key events, engagement, channels, landing pages                           | `src/google/ga4.ts`                                       |
+| PageSpeed: mobile + desktop score, LCP, CLS, INP, top 3 fixes                                   | `src/google/pagespeed.ts`                                 |
+| Health score 0-100 (formula below)                                                              | `src/lib/score.ts`                                        |
+| AI insights: summary + exactly 5 prioritized actions + Hinglish, Zod-validated, 1 retry         | `src/lib/ai.ts`                                           |
+| Dashboard with scores, trend arrows, "Reconnect needed" flags                                   | `web/src/pages/Dashboard.tsx`                             |
+| Client page: charts (clicks, sessions, speed), action items with "done" checkbox                | `web/src/pages/ClientDetail.tsx`                          |
+| Monthly report: Slides template → fill → PDF (stored in KV) → Gmail → share link `/r/:token`    | `src/jobs/report.ts`, `src/routes/public.ts`              |
+| "Preview & send manually" or auto-send per client                                               | Client page → Monthly reports                             |
+| Job logs with errors + "Run now"                                                                | `web/src/pages/Jobs.tsx`                                  |
+| Edit report in Google Slides → "Re-export PDF"; report email settings (subject, message, CC)    | `src/jobs/report.ts`, `web/src/pages/Settings.tsx`        |
+| Audit log, API usage (quota) tracking, logout from all devices                                  | `src/lib/audit.ts`, `src/lib/usage.ts`                    |
+| AI fallback: rule-based 5 actions when AI fails; metric-grounding check                         | `src/lib/insights.ts`                                     |
+| Keyword rank tracker: weekly Google positions per keyword (Search Console), 13-week graph       | `src/jobs/keywords.ts`, client page → Keywords            |
+| AI review reply drafts (English / Hinglish / Hindi), edited before posting                      | `src/lib/ai.ts`, client page → Local SEO & reviews        |
+| AI tools: SEO assistant chat, content writer, Google Ads copy, smart alerts                     | `src/lib/ai-tools.ts`, client page → AI tools             |
+| AI competitor review analysis, opt-in AI auto-reply to 4-5 star reviews                         | client page → Local SEO & reviews                         |
+| Prospect audits (free website audit + PDF for lead generation)                                  | `src/lib/site-audit.ts`, Prospect audits page             |
+| Google profile editor: AI suggestions → owner approves → applied on Google (undo), Google Posts | `src/jobs/gbp-edit.ts`, client page → Google profile      |
+| Privacy policy and terms pages (for the Google consent screen)                                  | `web/src/pages/Legal.tsx` (`/privacy`, `/terms`)          |
 
 Times are shown in IST; numbers use Indian grouping (1,23,456).
 
@@ -196,7 +197,8 @@ Data completeness **10**. Full rules, missing-data handling and worked examples:
 ## Jobs and reliability
 
 - **Cron** (UTC in `wrangler.jsonc`): `30 0 * * 1` = Monday 06:00 IST health checks;
-  `30 0 1 * *` = 1st of month 06:00 IST reports for the previous month.
+  `30 0 1 * *` = 1st of month 06:00 IST reports for the previous month;
+  `15 * * * *` = hourly, publishes scheduled Google Business Profile posts.
 - Cron only enqueues **one queue message per client**, so one failing client never affects others.
 - Each source (GSC, GA4, PageSpeed, AI) is independent: if one fails the check is saved as
   **partial** with the error shown on the client page and in Job logs.

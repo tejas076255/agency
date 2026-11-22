@@ -51,7 +51,7 @@
   // Cron times are UTC. 00:30 UTC = 06:00 IST.
   //  - Weekly health check: every Monday 06:00 IST
   //  - Monthly report: 1st of every month 06:00 IST
-  "triggers": { "crons": ["30 0 * * 1", "30 0 1 * *"] },
+  "triggers": { "crons": ["30 0 * * 1", "30 0 1 * *", "15 * * * *"] },
 
   "ai": { "binding": "AI" },
 
