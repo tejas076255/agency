@@ -484,6 +484,26 @@ function ReviewItem({
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [language, setLanguage] = useState<'en' | 'hinglish' | 'hi'>('en');
+  const [tone, setTone] = useState<'friendly' | 'professional'>('friendly');
+  const [drafted, setDrafted] = useState<'ai' | 'fallback' | null>(null);
+  async function draft() {
+    setDrafting(true);
+    try {
+      const r = await api<{ reply: string; source: 'ai' | 'fallback' }>(
+        `/api/clients/${clientId}/reviews/${review.id}/draft-reply`,
+        { method: 'POST', body: { language, tone } },
+      );
+      setText(r.reply);
+      setDrafted(r.source);
+      setReplying(true);
+    } catch (e) {
+      notify('error', (e as Error).message);
+    } finally {
+      setDrafting(false);
+    }
+  }
   async function send() {
     setBusy(true);
     try {
@@ -527,6 +547,22 @@ function ReviewItem({
         </p>
       ) : replying ? (
         <div className="mt-2 space-y-2">
+          <DraftControls
+            language={language}
+            tone={tone}
+            onLanguage={setLanguage}
+            onTone={setTone}
+            onDraft={draft}
+            drafting={drafting}
+            label={text ? 'Rewrite with AI' : '✨ Draft with AI'}
+          />
+          {drafted && (
+            <p className="text-xs text-slate-500">
+              {drafted === 'ai'
+                ? 'AI draft: read and edit it before posting. Nothing is posted until you click the button.'
+                : 'AI was unavailable, so a simple template was used. Please personalise it.'}
+            </p>
+          )}
           <textarea
             className={`${inputClass} min-h-20`}
             value={text}
@@ -539,20 +575,70 @@ function ReviewItem({
             <Button loading={busy} disabled={text.trim().length < 2} onClick={send}>
               Post reply on Google
             </Button>
-            <Button variant="secondary" onClick={() => setReplying(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReplying(false);
+                setDrafted(null);
+              }}
+            >
               Cancel
             </Button>
           </div>
         </div>
       ) : (
-        <button
-          className="mt-2 text-xs text-[var(--brand)] hover:underline"
-          onClick={() => setReplying(true)}
-        >
-          Reply
-        </button>
+        <div className="mt-2 flex items-center gap-4 text-xs">
+          <button className="text-[var(--brand)] hover:underline" onClick={() => setReplying(true)}>
+            Reply
+          </button>
+          <button
+            className="text-[var(--brand)] hover:underline disabled:opacity-50"
+            onClick={draft}
+            disabled={drafting}
+          >
+            {drafting ? 'Drafting…' : '✨ Draft reply with AI'}
+          </button>
+        </div>
       )}
     </li>
+  );
+}
+
+function DraftControls(props: {
+  language: 'en' | 'hinglish' | 'hi';
+  tone: 'friendly' | 'professional';
+  onLanguage: (v: 'en' | 'hinglish' | 'hi') => void;
+  onTone: (v: 'friendly' | 'professional') => void;
+  onDraft: () => void;
+  drafting: boolean;
+  label: string;
+}) {
+  const select = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs';
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <select
+        className={select}
+        value={props.language}
+        onChange={(e) => props.onLanguage(e.target.value as 'en' | 'hinglish' | 'hi')}
+        aria-label="Reply language"
+      >
+        <option value="en">English</option>
+        <option value="hinglish">Hinglish</option>
+        <option value="hi">Hindi</option>
+      </select>
+      <select
+        className={select}
+        value={props.tone}
+        onChange={(e) => props.onTone(e.target.value as 'friendly' | 'professional')}
+        aria-label="Reply tone"
+      >
+        <option value="friendly">Friendly</option>
+        <option value="professional">Professional</option>
+      </select>
+      <Button variant="secondary" loading={props.drafting} onClick={props.onDraft}>
+        {props.label}
+      </Button>
+    </div>
   );
 }
 

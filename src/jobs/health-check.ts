@@ -10,11 +10,15 @@ import { generateInsights } from '../lib/ai';
 import { getDb } from '../lib/db';
 import { buildCompactSummary } from '../lib/insights';
 import { reviewStats, syncIntegrations } from './integrations';
+import { syncKeywordRankings } from './keywords';
 import { log } from '../lib/log';
 import { computeHealthScore } from '../lib/score';
 
 export type SourceErrors = Partial<
-  Record<'gsc' | 'ga4' | 'pagespeed' | 'ai' | 'gbp' | 'ads' | 'youtube' | 'sentiment', string>
+  Record<
+    'gsc' | 'ga4' | 'pagespeed' | 'ai' | 'gbp' | 'ads' | 'youtube' | 'sentiment' | 'keywords',
+    string
+  >
 >;
 
 export type HealthCheckResult = {
@@ -89,6 +93,20 @@ export async function runHealthCheck(
   const gsc = value(gscR, 'gsc');
   const ga4 = value(ga4R, 'ga4');
   const psi = value(psiR, 'pagespeed');
+
+  // Keyword rank tracker (only when Search Console worked; no-op without tracked keywords).
+  if (gsc && token && client.gscSiteUrl) {
+    try {
+      const kw = await syncKeywordRankings(env, agencyId, clientId, client.gscSiteUrl, token, {
+        now,
+      });
+      if (kw.failed.length) {
+        errors.keywords = `${kw.failed.length} keyword(s) could not be checked: ${kw.failed[0]!.error}`;
+      }
+    } catch (err) {
+      errors.keywords = describeError(err);
+    }
+  }
 
   const score = computeHealthScore({
     search: gsc && {

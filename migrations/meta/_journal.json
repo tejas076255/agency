@@ -29,6 +29,13 @@
       "when": 1795260406642,
       "tag": "0003_phase2_phase3",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795327412885,
+      "tag": "0004_keyword_tracker",
+      "breakpoints": true
     }
   ]
 }

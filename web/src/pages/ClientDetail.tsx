@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ChangePill, ClientStatusBadge, ScoreBadge, StatusBadge } from '../components/badges';
 import { TrendChart } from '../components/charts';
 import { AdsTab, ExportsTab, LocalSeoTab, useIntegrations, YouTubeTab } from './ClientChannels';
+import { KeywordsTab } from './ClientKeywords';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DetailSkeleton, Skeleton } from '../components/Skeleton';
 import { Alert, Button, Card, inputClass } from '../components/ui';
@@ -29,6 +30,7 @@ const SOURCE_LABEL: Record<string, string> = {
   ga4: 'Analytics',
   pagespeed: 'PageSpeed',
   ai: 'AI insights',
+  keywords: 'Keyword tracker',
 };
 
 export function ClientDetailPage() {
@@ -131,7 +133,10 @@ export function ClientDetailPage() {
       {notice && <Alert kind={notice.kind}>{notice.text}</Alert>}
 
       <ClientTabs tab={tab} onChange={setTab} />
-      {tab !== 'overview' && (
+      {tab === 'keywords' && (
+        <KeywordsTab clientId={client.id} notify={(kind, text) => setNotice({ kind, text })} />
+      )}
+      {tab !== 'overview' && tab !== 'keywords' && (
         <ChannelPanel
           tab={tab}
           clientId={client.id}
@@ -375,9 +380,10 @@ export function ClientDetailPage() {
   );
 }
 
-type Tab = 'overview' | 'local' | 'ads' | 'youtube' | 'exports';
+type Tab = 'overview' | 'keywords' | 'local' | 'ads' | 'youtube' | 'exports';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'keywords', label: 'Keywords' },
   { id: 'local', label: 'Local SEO & reviews' },
   { id: 'ads', label: 'Google Ads' },
   { id: 'youtube', label: 'YouTube' },
@@ -415,7 +421,7 @@ function ChannelPanel({
   clientId,
   notify,
 }: {
-  tab: Exclude<Tab, 'overview'>;
+  tab: Exclude<Tab, 'overview' | 'keywords'>;
   clientId: string;
   notify: (kind: Notice['kind'], text: string) => void;
 }) {

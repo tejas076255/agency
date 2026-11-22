@@ -40,6 +40,13 @@ real data from Google yet, so field-level surprises are possible.
 | 3E YouTube Analytics            | ✅ Views, watch time, avg view duration, subscribers gained/lost, daily trend, top videos                                      |
 | 3F Combined dashboard           | ✅ Agency pages (Local SEO, Advertising, YouTube) + client tabs; AI action items and fallback rules use all connected channels |
 
+## Extra features (after Phase 3)
+
+| Feature                | Status                                                                                                                                                                                                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keyword rank tracker   | ✅ Agency tracks keywords per client (plan limit 10 / 25 / 50). 13 weeks of weekly Search Console positions load on add; refreshed by every weekly health check and "Check now". Suggestions from top + quick-win queries. Code: `src/jobs/keywords.ts`, `src/routes/keywords.ts`, `web/src/pages/ClientKeywords.tsx`. Mock-tested |
+| AI review reply drafts | ✅ "Draft reply with AI" on each review (English / Hinglish / Hindi, friendly / professional). Validated (no placeholders, promises or refunds), retry once, rule-based fallback. Draft is only shown for editing, never auto-posted or stored. Code: `draftReviewReply` in `src/lib/ai.ts`. Mock-tested                           |
+
 ## Phase 4
 
 - ✅ 4A Subscription architecture: `agencies.plan` (free / pro / agency)

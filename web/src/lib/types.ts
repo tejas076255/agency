@@ -441,6 +441,7 @@ export type Billing = {
     maxClients: number;
     maxMembers: number;
     manualRunsPerDay: number;
+    maxKeywordsPerClient: number;
   };
   usage: { clients: number; members: number; pendingInvites: number; manualRunsToday: number };
   plans: Record<
@@ -451,7 +452,37 @@ export type Billing = {
       maxClients: number;
       maxMembers: number;
       manualRunsPerDay: number;
+      maxKeywordsPerClient: number;
     }
   >;
   paymentsEnabled: boolean;
+};
+
+// ------------------------------- Keyword rank tracker -------------------------------
+
+export type KeywordWeek = {
+  periodEnd: string;
+  position: number | null;
+  clicks: number;
+  impressions: number;
+};
+
+export type TrackedKeyword = {
+  id: string;
+  keyword: string;
+  createdAt: number;
+  lastCheckedAt: number | null;
+  lastError: string | null;
+  latest: (KeywordWeek & { topPage: string | null }) | null;
+  change: number | null;
+  changeAll: number | null;
+  best: number | null;
+  history: KeywordWeek[];
+};
+
+export type KeywordsResponse = {
+  keywords: TrackedKeyword[];
+  suggestions: { keyword: string; position: number; impressions: number }[];
+  notReady: string | null;
+  limit: number;
 };

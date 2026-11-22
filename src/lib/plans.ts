@@ -17,17 +17,34 @@ export const PLANS: Record<
     maxClients: number;
     maxMembers: number;
     manualRunsPerDay: number;
+    /** Keyword rank tracker: keywords tracked per client. */
+    maxKeywordsPerClient: number;
   }
 > = {
   // Prices are placeholders for planning only; nothing is charged.
-  free: { name: 'Free', monthlyPriceInr: 0, maxClients: 5, maxMembers: 1, manualRunsPerDay: 30 },
-  pro: { name: 'Pro', monthlyPriceInr: 1999, maxClients: 25, maxMembers: 5, manualRunsPerDay: 200 },
+  free: {
+    name: 'Free',
+    monthlyPriceInr: 0,
+    maxClients: 5,
+    maxMembers: 1,
+    manualRunsPerDay: 30,
+    maxKeywordsPerClient: 10,
+  },
+  pro: {
+    name: 'Pro',
+    monthlyPriceInr: 1999,
+    maxClients: 25,
+    maxMembers: 5,
+    manualRunsPerDay: 200,
+    maxKeywordsPerClient: 25,
+  },
   agency: {
     name: 'Agency',
     monthlyPriceInr: 4999,
     maxClients: 100,
     maxMembers: 20,
     manualRunsPerDay: 1000,
+    maxKeywordsPerClient: 50,
   },
 };
 

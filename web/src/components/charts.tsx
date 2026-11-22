@@ -23,6 +23,7 @@ export function TrendChart({
   formatY = (v) => v.toLocaleString('en-IN'),
   yDomain,
   height = 220,
+  reversed = false,
 }: {
   data: Point[];
   xKey: string;
@@ -32,6 +33,8 @@ export function TrendChart({
   formatY?: (v: number) => string;
   yDomain?: [number, number];
   height?: number;
+  /** Lower is better (e.g. Google position): 1 at the top. */
+  reversed?: boolean;
 }) {
   if (data.length === 0) {
     return (
@@ -57,7 +60,8 @@ export function TrendChart({
             minTickGap={24}
           />
           <YAxis
-            domain={yDomain ?? [0, 'auto']}
+            domain={yDomain ?? (reversed ? [1, 'auto'] : [0, 'auto'])}
+            reversed={reversed}
             tickFormatter={(v: number) => formatY(v)}
             tick={{ fontSize: 11, fill: '#64748b' }}
             tickLine={false}

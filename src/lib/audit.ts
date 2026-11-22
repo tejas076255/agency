@@ -34,7 +34,9 @@ export type AuditAction =
   | 'export.sheets'
   | 'team.invite'
   | 'team.invite_revoke'
-  | 'team.member_remove';
+  | 'team.member_remove'
+  | 'keyword.add'
+  | 'keyword.remove';
 
 export type AuditEntry = {
   agencyId: string | null;

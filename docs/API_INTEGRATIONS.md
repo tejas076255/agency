@@ -29,14 +29,15 @@ building each Phase 2/3 integration.
 
 ## Phase 1 integrations (built)
 
-| Integration            | Code                                            | Endpoints                                                                            | Quota notes                                            |
-| ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Sign-in (OIDC)         | `src/lib/google-oauth.ts`, `src/routes/auth.ts` | accounts.google.com, oauth2.googleapis.com/token                                     | –                                                      |
-| Search Console         | `src/google/gsc.ts`                             | `sites.list`, `searchAnalytics.query` (6 calls/check)                                | Per-site and per-project QPS limits; backoff on 429    |
-| GA4                    | `src/google/ga4.ts`                             | Admin `accountSummaries`, Data `runReport` (5 calls/check)                           | GA4 property token quotas; backoff on 429              |
-| PageSpeed              | `src/google/pagespeed.ts`                       | `runPagespeed` mobile + desktop                                                      | 25,000/day default per key; each call can take 10-60 s |
-| Slides / Drive / Gmail | `src/google/workspace.ts`                       | `presentations.create/batchUpdate`, `files.copy/export/get`, Gmail media upload send | Drive export limit 10 MB; Gmail send ≤ 35 MB           |
-| Workers AI             | `src/lib/ai.ts` (`runModel`)                    | via AI Gateway `agency-autopilot` (falls back to direct)                             | Free 10k neurons/day                                   |
+| Integration            | Code                                            | Endpoints                                                                                   | Quota notes                                            |
+| ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Sign-in (OIDC)         | `src/lib/google-oauth.ts`, `src/routes/auth.ts` | accounts.google.com, oauth2.googleapis.com/token                                            | –                                                      |
+| Search Console         | `src/google/gsc.ts`                             | `sites.list`, `searchAnalytics.query` (6 calls/check)                                       | Per-site and per-project QPS limits; backoff on 429    |
+| GA4                    | `src/google/ga4.ts`                             | Admin `accountSummaries`, Data `runReport` (5 calls/check)                                  | GA4 property token quotas; backoff on 429              |
+| PageSpeed              | `src/google/pagespeed.ts`                       | `runPagespeed` mobile + desktop                                                             | 25,000/day default per key; each call can take 10-60 s |
+| Slides / Drive / Gmail | `src/google/workspace.ts`                       | `presentations.create/batchUpdate`, `files.copy/export/get`, Gmail media upload send        | Drive export limit 10 MB; Gmail send ≤ 35 MB           |
+| Keyword tracker        | `src/google/gsc.ts` (`fetchKeywordHistory`)     | `searchAnalytics.query` with a `query equals` filter: 2 calls per tracked keyword per check | Max 50 keywords/client, 4 in parallel; backoff on 429  |
+| Workers AI             | `src/lib/ai.ts` (`runModel`)                    | via AI Gateway `agency-autopilot` (falls back to direct)                                    | Free 10k neurons/day                                   |
 
 All Google calls go through `googleRequest()` (`src/google/http.ts`): exponential backoff + jitter on
 429/5xx (respects `Retry-After`), timeouts, readable errors, and **usage counting** per agency per day

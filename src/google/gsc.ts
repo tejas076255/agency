@@ -1,4 +1,4 @@
-import { comparePeriods, pctChange, round, type DateRange } from '../lib/dates';
+import { addDays, comparePeriods, istDate, pctChange, round, type DateRange } from '../lib/dates';
 import { googleRequest } from './http';
 
 const BASE = 'https://www.googleapis.com/webmasters/v3';
@@ -162,3 +162,109 @@ export function summarizeGsc(input: {
 }
 
 const nullableRound = (n: number | null) => (n === null ? null : round(n));
+
+// ------------------------------- Keyword rank tracker -------------------------------
+
+/** Search Console data lags ~2-3 days: the newest weekly window ends this many days ago. */
+export const RANK_LAG_DAYS = 3;
+/** Weeks of history kept per check (Search Console keeps 16 months; 13 weeks = one quarter). */
+export const RANK_WEEKS = 13;
+
+export type KeywordWeek = {
+  periodEnd: string;
+  position: number | null;
+  clicks: number;
+  impressions: number;
+};
+
+/** Search queries are stored and compared in lowercase with single spaces. */
+export function normalizeKeyword(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Pure function (unit-tested): daily rows for ONE query -> `weeks` 7-day windows ending at
+ * `endDate`, newest last. Position = impression-weighted average (as Search Console computes it);
+ * null when the site had no impressions for the query that week.
+ */
+export function weeklyRankings(
+  daily: { date: string; clicks: number; impressions: number; position: number }[],
+  endDate: string,
+  weeks = RANK_WEEKS,
+): KeywordWeek[] {
+  const byDate = new Map(daily.map((d) => [d.date, d]));
+  const out: KeywordWeek[] = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    const periodEnd = addDays(endDate, -7 * w);
+    let clicks = 0;
+    let impressions = 0;
+    let weighted = 0;
+    for (let d = 0; d < 7; d++) {
+      const row = byDate.get(addDays(periodEnd, -d));
+      if (!row) continue;
+      clicks += row.clicks;
+      impressions += row.impressions;
+      weighted += row.position * row.impressions;
+    }
+    out.push({
+      periodEnd,
+      position: impressions > 0 ? round(weighted / impressions) : null,
+      clicks,
+      impressions,
+    });
+  }
+  return out;
+}
+
+/**
+ * End date of the newest complete weekly window: the latest Saturday at least RANK_LAG_DAYS ago
+ * (IST). Anchoring to a weekday means every check in the same week writes the same windows.
+ */
+export function rankPeriodEnd(now = Date.now()): string {
+  const latest = addDays(istDate(now), -RANK_LAG_DAYS);
+  const dow = new Date(`${latest}T00:00:00Z`).getUTCDay(); // 0 = Sunday, 6 = Saturday
+  return addDays(latest, -((dow + 1) % 7));
+}
+
+/**
+ * Weekly positions of one keyword for the last RANK_WEEKS weeks, plus the page that ranks for it
+ * in the newest week. Two Search Console calls per keyword.
+ */
+export async function fetchKeywordHistory(
+  token: string,
+  siteUrl: string,
+  keyword: string,
+  now = Date.now(),
+): Promise<{ weeks: KeywordWeek[]; topPage: string | null }> {
+  const end = rankPeriodEnd(now);
+  const start = addDays(end, -(RANK_WEEKS * 7 - 1));
+  const filter = {
+    dimensionFilterGroups: [
+      { filters: [{ dimension: 'query', operator: 'equals', expression: keyword }] },
+    ],
+  };
+  const url = `${BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`;
+  const [daily, pages] = await Promise.all([
+    googleRequest<{ rows?: Row[] }>(url, {
+      accessToken: token,
+      json: { startDate: start, endDate: end, dimensions: ['date'], rowLimit: 500, ...filter },
+    }),
+    googleRequest<{ rows?: Row[] }>(url, {
+      accessToken: token,
+      json: {
+        startDate: addDays(end, -6),
+        endDate: end,
+        dimensions: ['page'],
+        rowLimit: 1,
+        ...filter,
+      },
+    }),
+  ]);
+  const rows = (daily.rows ?? []).map((r) => ({
+    date: r.keys?.[0] ?? '',
+    clicks: r.clicks,
+    impressions: r.impressions,
+    position: r.position,
+  }));
+  return { weeks: weeklyRankings(rows, end), topPage: pages.rows?.[0]?.keys?.[0] ?? null };
+}

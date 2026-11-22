@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Conventions:
 // - Primary keys are random UUID strings (crypto.randomUUID()).
@@ -436,4 +436,51 @@ export const invitations = sqliteTable(
     uniqueIndex('invites_token_uq').on(t.tokenHash),
     index('invites_agency_idx').on(t.agencyId),
   ],
+);
+
+// ------------------------------- Keyword rank tracker -------------------------------
+
+/** Search queries an agency tracks for a client (positions come from Search Console). */
+export const trackedKeywords = sqliteTable(
+  'tracked_keywords',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    keyword: text('keyword').notNull(), // lowercase, trimmed
+    lastCheckedAt: integer('last_checked_at'),
+    lastError: text('last_error'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('tracked_kw_client_keyword_uq').on(t.clientId, t.keyword),
+    index('tracked_kw_agency_idx').on(t.agencyId),
+  ],
+);
+
+/**
+ * Weekly position of a tracked keyword: 7-day window ending `period_end` (Search Console's
+ * impression-weighted average position). position is null when the site got no impressions.
+ */
+export const keywordRankings = sqliteTable(
+  'keyword_rankings',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    keywordId: text('keyword_id')
+      .notNull()
+      .references(() => trackedKeywords.id, { onDelete: 'cascade' }),
+    periodEnd: text('period_end').notNull(), // YYYY-MM-DD
+    position: real('position'),
+    clicks: integer('clicks').notNull().default(0),
+    impressions: integer('impressions').notNull().default(0),
+    topPage: text('top_page'),
+  },
+  (t) => [uniqueIndex('kw_rank_keyword_period_uq').on(t.keywordId, t.periodEnd)],
 );

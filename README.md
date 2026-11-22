@@ -43,6 +43,8 @@ Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gma
 | Edit report in Google Slides → "Re-export PDF"; report email settings (subject, message, CC) | `src/jobs/report.ts`, `web/src/pages/Settings.tsx`        |
 | Audit log, API usage (quota) tracking, logout from all devices                               | `src/lib/audit.ts`, `src/lib/usage.ts`                    |
 | AI fallback: rule-based 5 actions when AI fails; metric-grounding check                      | `src/lib/insights.ts`                                     |
+| Keyword rank tracker: weekly Google positions per keyword (Search Console), 13-week graph    | `src/jobs/keywords.ts`, client page → Keywords            |
+| AI review reply drafts (English / Hinglish / Hindi), edited before posting                   | `src/lib/ai.ts`, client page → Local SEO & reviews        |
 | Privacy policy and terms pages (for the Google consent screen)                               | `web/src/pages/Legal.tsx` (`/privacy`, `/terms`)          |
 
 Times are shown in IST; numbers use Indian grouping (1,23,456).

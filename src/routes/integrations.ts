@@ -36,9 +36,11 @@ import {
 import { listMyChannels, type YouTubeSummary } from '../google/youtube';
 import { runGbpDiagnostics } from '../jobs/gbp-diagnostics';
 import { latestSnapshot, reviewStats } from '../jobs/integrations';
+import { draftReviewReply } from '../lib/ai';
 import { auditRequest } from '../lib/audit';
 import { getDb } from '../lib/db';
 import { OAUTH_STATE_COOKIE, startGoogleOAuth } from '../lib/google-oauth';
+import { rateLimit } from '../lib/rate-limit';
 import { readJson } from '../lib/validate';
 import { currentUser, requireAgency, requireOwner } from '../middleware/auth';
 import type { AppEnv } from '../types';
@@ -385,6 +387,39 @@ integrationRoutes.post('/:id/reviews/:reviewId/reply', async (c) => {
   await auditRequest(c, 'review.reply', { targetType: 'review', targetId: review.id });
   return c.json({ ok: true });
 });
+
+/** AI draft of an owner reply. Only returned to the browser to edit; never posted or stored. */
+integrationRoutes.post(
+  '/:id/reviews/:reviewId/draft-reply',
+  rateLimit({ name: 'review-draft', limit: 20, windowSeconds: 60 }),
+  async (c) => {
+    const client = await loadClient(c);
+    if (!client) return c.json({ error: 'Client not found' }, 404);
+    const input = await readJson(
+      c,
+      z.object({
+        tone: z.enum(['friendly', 'professional']).default('friendly'),
+        language: z.enum(['en', 'hinglish', 'hi']).default('en'),
+      }),
+    );
+    const review = await getDb(c.env).query.reviews.findFirst({
+      where: and(
+        eq(reviews.id, c.req.param('reviewId')),
+        eq(reviews.clientId, client.id),
+        eq(reviews.agencyId, c.get('agencyId')),
+      ),
+    });
+    if (!review) return c.json({ error: 'Review not found' }, 404);
+    const draft = await draftReviewReply(c.env, {
+      businessName: client.name,
+      reviewerName: review.reviewerName,
+      starRating: review.starRating,
+      comment: review.comment,
+      ...input,
+    });
+    return c.json({ reply: draft.reply, source: draft.source });
+  },
+);
 
 // ---------------------------------- Competitors ----------------------------------
 

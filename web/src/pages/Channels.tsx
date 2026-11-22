@@ -331,6 +331,7 @@ export function BillingPage() {
                     {p.maxMembers} team member{p.maxMembers > 1 ? 's' : ''}
                   </li>
                   <li>{p.manualRunsPerDay} manual runs/day</li>
+                  <li>{p.maxKeywordsPerClient} tracked keywords per client</li>
                 </ul>
                 <p className="mt-3 text-xs text-slate-400">
                   {id === b.plan

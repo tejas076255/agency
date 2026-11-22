@@ -7,6 +7,7 @@ import { agencyRoutes } from './routes/agency';
 import { authRoutes } from './routes/auth';
 import { actionItemRoutes, clientRoutes } from './routes/clients';
 import { channelRoutes, integrationRoutes } from './routes/integrations';
+import { keywordRoutes } from './routes/keywords';
 import { meRoutes } from './routes/me';
 import { billingRoutes, teamRoutes } from './routes/team';
 import { publicRoutes } from './routes/public';
@@ -35,6 +36,7 @@ app.route('/api/agency/google', workspaceRoutes);
 app.route('/api/agency', agencyRoutes);
 app.route('/api/clients', clientRoutes);
 app.route('/api/clients', integrationRoutes); // Phase 2/3 per-client integrations
+app.route('/api/clients', keywordRoutes); // keyword rank tracker
 app.route('/api/channels', channelRoutes);
 app.route('/api/team', teamRoutes);
 app.route('/api/billing', billingRoutes);
