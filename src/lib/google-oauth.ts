@@ -13,7 +13,7 @@ export const LOGIN_SCOPES = ['openid', 'email', 'profile'];
 const oauthStateSchema = z.object({
   purpose: z.enum(['login', 'connect_client', 'connect_agency']),
   /** connect_client only: which client product (data, gbp, ads, youtube). Default "data". */
-  product: z.enum(['data', 'gbp', 'ads', 'youtube']).optional(),
+  product: z.enum(['data', 'gbp', 'ads', 'youtube', 'setup']).optional(),
   /** login only: team invitation token from an invite link. */
   inviteToken: z.string().max(100).optional(),
   verifier: z.string(),

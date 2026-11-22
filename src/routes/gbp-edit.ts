@@ -34,7 +34,14 @@ import { clientScope } from './clients';
 export const gbpEditRoutes = new Hono<AppEnv>();
 gbpEditRoutes.use('*', requireAgency);
 
-const kindSchema = z.enum(['description', 'categories', 'services', 'hours', 'attributes']);
+const kindSchema = z.enum([
+  'description',
+  'categories',
+  'services',
+  'hours',
+  'attributes',
+  'website',
+]);
 const languageSchema = z.enum(['en', 'hinglish', 'hi']).default('en');
 const writeLimit = rateLimit({ name: 'gbp-write', limit: 10, windowSeconds: 60 });
 
@@ -48,7 +55,7 @@ function fail(c: Context<AppEnv>, err: unknown) {
   return c.json({ error: describeError(err) }, 400);
 }
 
-const toChange = (r: typeof gbpChanges.$inferSelect) => ({
+export const toChange = (r: typeof gbpChanges.$inferSelect) => ({
   id: r.id,
   kind: r.kind,
   source: r.source,
@@ -62,7 +69,7 @@ const toChange = (r: typeof gbpChanges.$inferSelect) => ({
   createdAt: r.createdAt,
 });
 
-const toPost = (p: typeof gbpPosts.$inferSelect) => ({
+export const toPost = (p: typeof gbpPosts.$inferSelect) => ({
   id: p.id,
   summary: p.summary,
   actionType: p.actionType,

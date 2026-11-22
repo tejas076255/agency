@@ -127,7 +127,8 @@ export function ClientFormPage() {
           method: 'POST',
           body: values,
         });
-        navigate(`/clients/${res.client.id}`);
+        // New client: start the one-click setup on the Grow tab.
+        navigate(`/clients/${res.client.id}?tab=growth`);
       }
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Could not save');

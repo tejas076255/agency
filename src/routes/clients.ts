@@ -75,6 +75,30 @@ clientRoutes.get('/', async (c) => {
         .orderBy(desc(healthChecks.runAt))
         .limit(1000)
     : [];
+  // Grow: latest Business Profile score and how many one-click fixes are waiting.
+  const profile = new Map<string, { score: number | null; fixes: number }>();
+  if (ids.length) {
+    const marks = ids.map(() => '?').join(',');
+    const scans = await c.env.DB.prepare(
+      `SELECT client_id, score FROM profile_scans p WHERE agency_id = ? AND client_id IN (${marks})
+         AND run_at = (SELECT MAX(run_at) FROM profile_scans q WHERE q.client_id = p.client_id AND q.score IS NOT NULL)`,
+    )
+      .bind(agencyId, ...ids)
+      .all<{ client_id: string; score: number | null }>();
+    const fixes = await c.env.DB.prepare(
+      `SELECT client_id, SUM(n) AS n FROM (
+         SELECT client_id, COUNT(*) AS n FROM gbp_changes WHERE agency_id = ?1 AND status = 'draft' GROUP BY client_id
+         UNION ALL SELECT client_id, COUNT(*) FROM gbp_posts WHERE agency_id = ?1 AND status = 'draft' GROUP BY client_id
+         UNION ALL SELECT client_id, COUNT(*) FROM reviews WHERE agency_id = ?1 AND reply_comment IS NULL AND ai_draft_reply IS NOT NULL GROUP BY client_id
+       ) GROUP BY client_id`,
+    )
+      .bind(agencyId)
+      .all<{ client_id: string; n: number }>();
+    for (const r of scans.results ?? []) profile.set(r.client_id, { score: r.score, fixes: 0 });
+    for (const r of fixes.results ?? []) {
+      profile.set(r.client_id, { score: profile.get(r.client_id)?.score ?? null, fixes: r.n });
+    }
+  }
   const byClient = new Map<string, typeof checks>();
   for (const ch of checks) {
     const arr = byClient.get(ch.clientId) ?? [];
@@ -94,6 +118,8 @@ clientRoutes.get('/', async (c) => {
         lastRunAt: latest?.runAt ?? null,
         lastStatus: latest?.status ?? null,
         sourcesSelected: Boolean(cl.gscSiteUrl || cl.ga4PropertyId),
+        profileScore: profile.get(cl.id)?.score ?? null,
+        fixesReady: profile.get(cl.id)?.fixes ?? 0,
       };
     }),
   });

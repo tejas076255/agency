@@ -237,7 +237,7 @@ export const jobRuns = sqliteTable(
       .notNull()
       .references(() => agencies.id, { onDelete: 'cascade' }),
     clientId: text('client_id').references(() => clients.id, { onDelete: 'cascade' }),
-    type: text('type', { enum: ['health_check', 'monthly_report'] }).notNull(),
+    type: text('type', { enum: ['health_check', 'monthly_report', 'profile_scan'] }).notNull(),
     trigger: text('trigger', { enum: ['cron', 'manual'] }).notNull(),
     status: text('status', {
       enum: ['queued', 'running', 'success', 'partial', 'failed'],
@@ -351,6 +351,9 @@ export const reviews = sqliteTable(
     replyUpdatedAt: integer('reply_updated_at'),
     /** The reply was posted automatically by the AI auto-reply rule. */
     autoReplied: integer('auto_replied', { mode: 'boolean' }).notNull().default(false),
+    /** AI reply prepared by the profile scan, waiting for one-click "Post" (never auto-posted). */
+    aiDraftReply: text('ai_draft_reply'),
+    aiDraftAt: integer('ai_draft_at'),
     syncedAt: integer('synced_at').notNull(),
   },
   (t) => [
@@ -565,9 +568,10 @@ export const gbpChanges = sqliteTable(
       .references(() => clients.id, { onDelete: 'cascade' }),
     locationName: text('location_name').notNull(),
     kind: text('kind', {
-      enum: ['description', 'categories', 'services', 'hours', 'attributes'],
+      enum: ['description', 'categories', 'services', 'hours', 'attributes', 'website'],
     }).notNull(),
-    source: text('source', { enum: ['ai', 'manual', 'undo'] }).notNull(),
+    // website = prefilled from the client's own website (hours, link), not written by AI
+    source: text('source', { enum: ['ai', 'manual', 'undo', 'website'] }).notNull(),
     status: text('status', {
       enum: ['draft', 'applied', 'pending_google', 'failed', 'rejected', 'reverted'],
     }).notNull(),
@@ -623,4 +627,30 @@ export const gbpPosts = sqliteTable(
     index('gbp_posts_client_idx').on(t.clientId, t.createdAt),
     index('gbp_posts_due_idx').on(t.status, t.scheduledFor),
   ],
+);
+
+// ------------------------------- Business Profile score -------------------------------
+
+/** One "Grow" scan: Business Profile score, checklist items and the facts they came from. */
+export const profileScans = sqliteTable(
+  'profile_scans',
+  {
+    id: id(),
+    agencyId: text('agency_id')
+      .notNull()
+      .references(() => agencies.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    runAt: integer('run_at').notNull(),
+    trigger: text('trigger', { enum: ['setup', 'manual', 'cron', 'after_publish'] }).notNull(),
+    status: text('status', { enum: ['ok', 'partial', 'failed'] }).notNull(),
+    score: integer('score'),
+    /** Score if every ready AI fix is posted. */
+    projectedScore: integer('projected_score'),
+    itemsJson: text('items_json'),
+    factsJson: text('facts_json'),
+    error: text('error'),
+  },
+  (t) => [index('profile_scans_client_idx').on(t.clientId, t.runAt)],
 );

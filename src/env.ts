@@ -42,7 +42,9 @@ export type JobMessage = {
   jobRunId: string;
   agencyId: string;
   clientId: string;
-  type: 'health_check' | 'monthly_report';
+  type: 'health_check' | 'monthly_report' | 'profile_scan';
+  trigger?: 'cron' | 'manual' | 'setup';
+  userId?: string;
   /** monthly_report only: "YYYY-MM" and whether to email it right away. */
   month?: string;
   send?: boolean;

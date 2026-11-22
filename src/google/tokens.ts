@@ -57,6 +57,26 @@ export const CLIENT_PRODUCTS = {
 } as const;
 export type ClientProduct = keyof typeof CLIENT_PRODUCTS;
 
+/**
+ * One-click setup: one Google sign-in for Search Console, GA4, Business Profile and YouTube.
+ * Google Ads is left out (it needs the adwords scope on the consent screen and is connected
+ * separately). Each granted product gets its own connection row with the same grant.
+ */
+export const SETUP_PRODUCTS = [
+  'data',
+  'gbp',
+  'youtube',
+] as const satisfies readonly ClientProduct[];
+export const SETUP_SCOPES = [
+  'openid',
+  'email',
+  SCOPE.gsc,
+  SCOPE.ga4,
+  SCOPE.business,
+  SCOPE.youtube,
+  SCOPE.ytAnalytics,
+];
+
 /** True if the granted scopes satisfy a product (all required, or any for 'data'). */
 export function grantedEnough(product: ClientProduct, granted: string[]): boolean {
   const p = CLIENT_PRODUCTS[product];

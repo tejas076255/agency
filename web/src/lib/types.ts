@@ -12,6 +12,9 @@ export type ClientListItem = {
   lastRunAt: number | null;
   lastStatus: string | null;
   sourcesSelected: boolean;
+  /** Grow: latest Business Profile score and one-click fixes waiting. */
+  profileScore: number | null;
+  fixesReady: number;
 };
 
 export type FieldData = {

@@ -89,6 +89,18 @@ export const AFTER_SCHEMAS = {
         'Closing time must be after opening time',
       ),
   }),
+  website: z.object({
+    // '' = remove the website (only used when undoing a change to an empty website).
+    websiteUri: z.union([
+      z
+        .string()
+        .trim()
+        .url()
+        .max(500)
+        .refine((u) => u.startsWith('https://'), 'Website must start with https://'),
+      z.literal(''),
+    ]),
+  }),
   attributes: z.object({
     attributes: z
       .array(z.object({ name: z.string().regex(/^attributes\/[\w.-]+$/), value: z.boolean() }))
@@ -120,6 +132,8 @@ export function sliceOf(
       return { services: p.services };
     case 'hours':
       return { hours: p.hours };
+    case 'website':
+      return { websiteUri: p.websiteUri ?? '' };
     case 'attributes':
       return {
         attributes: (attrNames ?? []).map((name) => ({
@@ -164,7 +178,7 @@ export async function createAiSuggestions(
   env: Env,
   agencyId: string,
   client: Client,
-  userId: string,
+  userId: string | null,
   opts: { language: Language; notes?: string },
 ): Promise<{ drafts: ChangeRow[]; notes: string[] }> {
   const conn = await businessConn(env, agencyId, client);
@@ -512,7 +526,7 @@ export async function generatePostDrafts(
   env: Env,
   agencyId: string,
   client: Client,
-  userId: string,
+  userId: string | null,
   opts: { topic: string; language: Language; notes?: string },
 ): Promise<PostRow[]> {
   const r = await generateContent(env, {

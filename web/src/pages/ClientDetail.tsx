@@ -6,6 +6,7 @@ import { AdsTab, ExportsTab, LocalSeoTab, useIntegrations, YouTubeTab } from './
 import { KeywordsTab } from './ClientKeywords';
 import { AiTab } from './ClientAi';
 import { GbpEditorTab } from './ClientGbpEditor';
+import { GrowTab } from './ClientGrowth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DetailSkeleton, Skeleton } from '../components/Skeleton';
 import { Alert, Button, Card, inputClass } from '../components/ui';
@@ -42,6 +43,7 @@ export function ClientDetailPage() {
   const [data, setData] = useState<ClientDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [justConnected, setJustConnected] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -62,7 +64,8 @@ export function ClientDetailPage() {
   useEffect(() => {
     const connected = params.get('connected');
     if (connected && connected !== '1' && connected !== 'data') {
-      setTab(connected === 'gbp' ? 'local' : (connected as Tab));
+      setTab(connected === 'gbp' ? 'local' : connected === 'setup' ? 'growth' : (connected as Tab));
+      if (connected === 'setup') setJustConnected(true);
       setNotice({
         kind: 'success',
         text: 'Google account connected. Now choose what to track below.',
@@ -141,16 +144,27 @@ export function ClientDetailPage() {
       {tab === 'ai' && (
         <AiTab clientId={client.id} notify={(kind, text) => setNotice({ kind, text })} />
       )}
-      {tab === 'profile' && (
-        <GbpEditorTab clientId={client.id} notify={(kind, text) => setNotice({ kind, text })} />
-      )}
-      {tab !== 'overview' && tab !== 'keywords' && tab !== 'ai' && tab !== 'profile' && (
-        <ChannelPanel
-          tab={tab}
+      {tab === 'growth' && (
+        <GrowTab
           clientId={client.id}
+          justConnected={justConnected}
           notify={(kind, text) => setNotice({ kind, text })}
         />
       )}
+      {tab === 'profile' && (
+        <GbpEditorTab clientId={client.id} notify={(kind, text) => setNotice({ kind, text })} />
+      )}
+      {tab !== 'overview' &&
+        tab !== 'keywords' &&
+        tab !== 'ai' &&
+        tab !== 'profile' &&
+        tab !== 'growth' && (
+          <ChannelPanel
+            tab={tab}
+            clientId={client.id}
+            notify={(kind, text) => setNotice({ kind, text })}
+          />
+        )}
 
       <div className={tab === 'overview' ? 'space-y-6' : 'hidden'}>
         <ConnectionCard data={data} onChange={load} onNotice={setNotice} />
@@ -388,9 +402,11 @@ export function ClientDetailPage() {
   );
 }
 
-type Tab = 'overview' | 'keywords' | 'ai' | 'profile' | 'local' | 'ads' | 'youtube' | 'exports';
+type Tab =
+  'overview' | 'growth' | 'keywords' | 'ai' | 'profile' | 'local' | 'ads' | 'youtube' | 'exports';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'growth', label: '🚀 Grow' },
   { id: 'keywords', label: 'Keywords' },
   { id: 'ai', label: '✨ AI tools' },
   { id: 'profile', label: 'Google profile' },
@@ -431,7 +447,7 @@ function ChannelPanel({
   clientId,
   notify,
 }: {
-  tab: Exclude<Tab, 'overview' | 'keywords' | 'ai' | 'profile'>;
+  tab: Exclude<Tab, 'overview' | 'keywords' | 'ai' | 'profile' | 'growth'>;
   clientId: string;
   notify: (kind: Notice['kind'], text: string) => void;
 }) {

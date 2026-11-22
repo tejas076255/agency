@@ -31,6 +31,9 @@ type ServiceItem = {
 export type RawEditableLocation = {
   name: string;
   title?: string;
+  websiteUri?: string;
+  phoneNumbers?: { primaryPhone?: string; additionalPhones?: string[] };
+  storefrontAddress?: { addressLines?: string[]; locality?: string; postalCode?: string };
   profile?: { description?: string };
   categories?: { primaryCategory?: Category; additionalCategories?: Category[] };
   serviceItems?: ServiceItem[];
@@ -48,11 +51,13 @@ export type EditableProfile = {
   services: { label: string; description: string; category: string; structured?: boolean }[];
   hours: { day: Day; open: string; close: string }[];
   attributes: { name: string; value: boolean }[];
+  websiteUri: string | null;
   verified: boolean | null;
   hasPendingEdits: boolean;
 };
 
-const READ_MASK = 'name,title,profile,categories,serviceItems,regularHours,metadata';
+const READ_MASK =
+  'name,title,websiteUri,phoneNumbers,storefrontAddress,profile,categories,serviceItems,regularHours,metadata';
 
 const hhmm = (t?: TimeOfDay) =>
   `${String(t?.hours ?? 0).padStart(2, '0')}:${String(t?.minutes ?? 0).padStart(2, '0')}`;
@@ -91,12 +96,14 @@ export function toEditableProfile(
       close: p.closeTime?.hours === 24 ? '24:00' : hhmm(p.closeTime),
     })),
     attributes,
+    websiteUri: raw.websiteUri ?? null,
     verified: raw.metadata?.hasVoiceOfMerchant ?? null,
     hasPendingEdits: raw.metadata?.hasPendingEdits ?? false,
   };
 }
 
-export type ChangeKind = 'description' | 'categories' | 'services' | 'hours' | 'attributes';
+export type ChangeKind =
+  'description' | 'categories' | 'services' | 'hours' | 'attributes' | 'website';
 
 /**
  * Pure (unit-tested): request body + updateMask for one kind of change. Services are a full
@@ -107,6 +114,9 @@ export function buildPatch(
   after: EditableProfile,
   current: RawEditableLocation,
 ): { body: Record<string, unknown>; updateMask: string } {
+  if (kind === 'website') {
+    return { body: { websiteUri: after.websiteUri }, updateMask: 'websiteUri' };
+  }
   if (kind === 'description') {
     return {
       body: { profile: { description: after.description } },
@@ -309,5 +319,42 @@ export async function deleteLocalPost(token: string, postName: string): Promise<
   } catch (err) {
     if (err instanceof GoogleApiError && err.status === 404) return; // already gone
     throw err;
+  }
+}
+
+/** Number of photos/videos on the listing (v4 media list). null if Google refuses. */
+export async function countMedia(
+  token: string,
+  accountName: string,
+  locationName: string,
+): Promise<number | null> {
+  try {
+    const r = await googleRequest<{ totalMediaItemCount?: number; mediaItems?: unknown[] }>(
+      `${V4}/${accountName}/${locationName}/media?pageSize=1`,
+      { accessToken: token, retries: 0 },
+    );
+    return r.totalMediaItemCount ?? r.mediaItems?.length ?? 0;
+  } catch {
+    return null;
+  }
+}
+
+/** When the newest Google post was created (epoch ms), 0 if none, null if Google refuses. */
+export async function latestPostTime(
+  token: string,
+  accountName: string,
+  locationName: string,
+): Promise<number | null> {
+  try {
+    const r = await googleRequest<{ localPosts?: { createTime?: string; state?: string }[] }>(
+      `${V4}/${accountName}/${locationName}/localPosts?pageSize=10`,
+      { accessToken: token, retries: 0 },
+    );
+    const times = (r.localPosts ?? [])
+      .map((p) => Date.parse(p.createTime ?? ''))
+      .filter((t) => Number.isFinite(t));
+    return times.length ? Math.max(...times) : 0;
+  } catch {
+    return null;
   }
 }

@@ -84,6 +84,33 @@ live, verified listing.
 - Needs a verified location (owner control) and Business Profile API access; unverified listings
   show a warning.
 
+### Grow: one-click setup, Business Profile score, one-click Post
+
+Client page → **🚀 Grow** tab (new clients open here). Mock-tested (`test/growth.test.ts`); not yet
+tried with a live, verified listing.
+
+1. **Connect**: one Google sign-in for Search Console, GA4, Business Profile and YouTube (Ads stays
+   separate). Each product gets its own connection row with the same grant.
+2. **Auto-detect** (`src/lib/auto-detect.ts`, `src/jobs/setup.ts`): reads the client website (final
+   URL, phone numbers, GA4 IDs incl. those inside the GTM container, opening hours schema, sitemap
+   services) and picks the Search Console Domain property, the GA4 property with the website's
+   measurement ID, the Business location with the same website/phone/name, and the YouTube channel.
+   Clear winners are saved for empty fields; existing choices are never overridden but a better
+   match is flagged ("Switch to it"); ambiguous cases ask "Which one is yours?".
+3. **Scan** (queue job `profile_scan`, progress in KV): listing, website, reviews (synced from
+   Google), competitors (Places, live), then the **Business Profile Score** (`src/lib/profile-score.ts`,
+   100 points: basics 30, content 25, reviews 30, consistency 15) with Missing / Improve / Done.
+4. **Fixes ready**: AI description/categories/services/attributes, website link and opening hours
+   copied from the website, 2 Google post drafts if nothing was posted in 7 days, and reply drafts
+   for up to 5 unanswered reviews. Nothing is posted automatically.
+5. **Post / Post all** (owner only): profile changes are validated then applied, replies posted,
+   first post published and the rest scheduled every 3 days at 10:00 IST; then a quick re-scan
+   shows the score before → after. Things only the owner or Google can do (verification, photos,
+   reviews, phone mismatch) are listed as a to-do.
+6. **Weekly autopilot**: the Monday cron also queues a profile scan for every client with a
+   Business Profile; owners get a "N improvements ready" email (agency Gmail). The client list shows
+   the profile score and ready fixes.
+
 Not built: **WhatsApp bot** (needs a Meta WhatsApp Business account and approved message templates).
 The monthly report already had an AI summary (English + Hinglish) before this.
 

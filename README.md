@@ -49,6 +49,7 @@ Google Search Console, GA4 Data/Admin, PageSpeed Insights, Slides, Drive and Gma
 | AI competitor review analysis, opt-in AI auto-reply to 4-5 star reviews                         | client page → Local SEO & reviews                         |
 | Prospect audits (free website audit + PDF for lead generation)                                  | `src/lib/site-audit.ts`, Prospect audits page             |
 | Google profile editor: AI suggestions → owner approves → applied on Google (undo), Google Posts | `src/jobs/gbp-edit.ts`, client page → Google profile      |
+| Grow: one-click setup with auto-detect, Business Profile score, ready fixes, one-click Post all | `src/jobs/profile-scan.ts`, client page → Grow            |
 | Privacy policy and terms pages (for the Google consent screen)                                  | `web/src/pages/Legal.tsx` (`/privacy`, `/terms`)          |
 
 Times are shown in IST; numbers use Indian grouping (1,23,456).

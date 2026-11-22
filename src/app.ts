@@ -9,6 +9,7 @@ import { actionItemRoutes, clientRoutes } from './routes/clients';
 import { channelRoutes, integrationRoutes } from './routes/integrations';
 import { keywordRoutes } from './routes/keywords';
 import { gbpEditRoutes } from './routes/gbp-edit';
+import { growthRoutes } from './routes/growth';
 import { aiClientRoutes, aiUsageRoutes, alertRoutes, prospectRoutes } from './routes/ai';
 import { meRoutes } from './routes/me';
 import { billingRoutes, teamRoutes } from './routes/team';
@@ -41,6 +42,7 @@ app.route('/api/clients', integrationRoutes); // Phase 2/3 per-client integratio
 app.route('/api/clients', keywordRoutes); // keyword rank tracker
 app.route('/api/clients', aiClientRoutes); // AI tools per client
 app.route('/api/clients', gbpEditRoutes); // Business Profile editing + posts
+app.route('/api/clients', growthRoutes); // one-click setup, profile score, Post all
 app.route('/api/alerts', alertRoutes);
 app.route('/api/prospects', prospectRoutes);
 app.route('/api/ai', aiUsageRoutes);

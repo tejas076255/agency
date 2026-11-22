@@ -37,7 +37,7 @@ export type IntegrationResults = {
   errors: Partial<Record<SnapshotSource | 'sentiment', string>>;
 };
 
-async function saveSnapshot(
+export async function saveSnapshot(
   env: Env,
   c: Client,
   source: SnapshotSource,

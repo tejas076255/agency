@@ -7,6 +7,7 @@ import {
   grantedEnough,
   saveConnection,
   SCOPE,
+  SETUP_PRODUCTS,
   type ClientProduct,
 } from '../google/tokens';
 import { acceptInvitation } from '../lib/team';
@@ -107,7 +108,7 @@ authRoutes.get('/google/callback', authLimit, async (c) => {
 async function completeConnect(c: Context<AppEnv>, code: string, saved: OAuthState) {
   const back =
     saved.purpose === 'connect_client'
-      ? `/clients/${saved.clientId}${saved.product && saved.product !== 'data' ? `?tab=${saved.product}&` : '?'}`
+      ? `/clients/${saved.clientId}${saved.product === 'setup' ? '?tab=growth&' : saved.product && saved.product !== 'data' ? `?tab=${saved.product}&` : '?'}`
       : '/settings?';
   const fail = (reason: string) => c.redirect(`${back}connect_error=${reason}`, 302);
 
@@ -127,8 +128,40 @@ async function completeConnect(c: Context<AppEnv>, code: string, saved: OAuthSta
     const granted = tokens.scope.split(' ');
     const db = getDb(c.env);
 
+    if (saved.purpose === 'connect_client' && saved.product === 'setup') {
+      const client = await db.query.clients.findFirst({
+        where: and(eq(clients.id, saved.clientId ?? ''), eq(clients.agencyId, saved.agencyId)),
+      });
+      if (!client) return c.redirect('/dashboard', 302);
+      const products = SETUP_PRODUCTS.filter((p) => grantedEnough(p, granted));
+      if (products.length === 0) return fail('missing_scopes');
+      for (const p of products) {
+        await saveConnection(c.env, {
+          agencyId: saved.agencyId,
+          clientId: client.id,
+          purpose: CLIENT_PRODUCTS[p].purpose,
+          googleEmail: claims?.email ?? 'unknown',
+          scopes: tokens.scope,
+          refreshToken: tokens.refresh_token,
+          userId: user.id,
+        });
+      }
+      if (products.includes('data')) {
+        await db
+          .update(clients)
+          .set({ status: 'active', updatedAt: Date.now() })
+          .where(and(eq(clients.id, client.id), eq(clients.agencyId, saved.agencyId)));
+      }
+      await auditRequest(c, 'google.client_connect', {
+        targetType: 'client',
+        targetId: client.id,
+        metadata: { product: 'setup', products, googleEmail: claims?.email },
+      });
+      return c.redirect(`/clients/${client.id}?tab=growth&connected=setup`, 302);
+    }
+
     if (saved.purpose === 'connect_client') {
-      const product: ClientProduct = saved.product ?? 'data';
+      const product: ClientProduct = (saved.product === 'setup' ? 'data' : saved.product) ?? 'data';
       const client = await db.query.clients.findFirst({
         where: and(eq(clients.id, saved.clientId ?? ''), eq(clients.agencyId, saved.agencyId)),
       });

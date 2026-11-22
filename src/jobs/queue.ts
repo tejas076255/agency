@@ -1,5 +1,6 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import { publishDuePosts } from './gbp-edit';
+import { runProfileScan } from './profile-scan';
 import { clients, jobRuns } from '../db/schema';
 import type { Env, JobMessage } from '../env';
 import { describeError, GoogleApiError, ReconnectNeededError } from '../google/http';
@@ -33,7 +34,9 @@ export type JobRequest = {
   agencyId: string;
   clientId: string;
   type: JobType;
-  trigger: 'cron' | 'manual';
+  trigger: 'cron' | 'manual' | 'setup';
+  /** profile_scan: user who started it (drafts are attributed to them). */
+  userId?: string;
   month?: string;
   send?: boolean;
   /** Scheduled jobs pass one; a duplicate key is silently skipped (idempotent cron). */
@@ -50,7 +53,7 @@ export async function enqueueJobs(env: Env, jobs: JobRequest[]): Promise<string[
     agencyId: j.agencyId,
     clientId: j.clientId,
     type: j.type,
-    trigger: j.trigger,
+    trigger: j.trigger === 'setup' ? ('manual' as const) : j.trigger,
     status: 'queued' as const,
     attempt: 0,
     dedupeKey: j.dedupeKey ?? null,
@@ -79,6 +82,8 @@ export async function enqueueJobs(env: Env, jobs: JobRequest[]): Promise<string[
         type: r.type,
         month: j.month,
         send: j.send,
+        trigger: j.trigger,
+        userId: j.userId,
       } satisfies JobMessage,
     }));
   for (let i = 0; i < messages.length; i += 100) {
@@ -134,6 +139,22 @@ export async function handleCron(cron: string, env: Env, now = Date.now()) {
     })),
   );
   log.info(`Weekly health cron: queued ${queued.length}/${list.length} clients for ${week}`);
+  // Weekly "Grow" autopilot: rescan Business Profiles and prepare new one-click fixes.
+  const gbpClients = await db
+    .select({ id: clients.id, agencyId: clients.agencyId })
+    .from(clients)
+    .where(isNotNull(clients.gbpLocationName));
+  const scans = await enqueueJobs(
+    env,
+    gbpClients.map((c) => ({
+      agencyId: c.agencyId,
+      clientId: c.id,
+      type: 'profile_scan' as const,
+      trigger: 'cron' as const,
+      dedupeKey: `profile_scan:${c.id}:${week}`,
+    })),
+  );
+  log.info(`Weekly profile scans: queued ${scans.length}/${gbpClients.length}`);
 }
 
 function isTransient(err: unknown): boolean {
@@ -160,7 +181,20 @@ async function processMessage(env: Env, msg: Message<JobMessage>) {
     .where(where);
 
   try {
-    if (job.type === 'health_check') {
+    if (job.type === 'profile_scan') {
+      const r = await runProfileScan(env, job.agencyId, job.clientId, {
+        trigger: job.trigger === 'cron' ? 'cron' : job.trigger === 'setup' ? 'setup' : 'manual',
+        userId: job.userId ?? null,
+      });
+      await db
+        .update(jobRuns)
+        .set({
+          status: r.status === 'ok' ? 'success' : r.status === 'partial' ? 'partial' : 'failed',
+          error: r.status === 'failed' ? 'Profile scan failed (see the Grow tab)' : null,
+          finishedAt: Date.now(),
+        })
+        .where(where);
+    } else if (job.type === 'health_check') {
       const r = await runHealthCheck(env, job.agencyId, job.clientId);
       const errs = Object.entries(r.errors)
         .map(([k, v]) => `${k}: ${v}`)

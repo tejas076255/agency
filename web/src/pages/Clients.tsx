@@ -95,6 +95,19 @@ export function ClientsPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate font-medium">{c.name}</span>
                           <ClientStatusBadge status={c.status} />
+                          {c.profileScore !== null && (
+                            <span
+                              className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700"
+                              title="Google Business Profile score"
+                            >
+                              Profile {c.profileScore}/100
+                            </span>
+                          )}
+                          {c.fixesReady > 0 && (
+                            <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">
+                              ✨ {c.fixesReady} fix{c.fixesReady > 1 ? 'es' : ''} ready
+                            </span>
+                          )}
                           {c.status === 'active' && !c.sourcesSelected && (
                             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
                               ⚠ Pick data sources

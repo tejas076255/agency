@@ -38,7 +38,7 @@ function assertPublicHost(u: URL) {
 }
 
 /** Fetch with manual redirects (each hop re-validated), timeout and a size cap. */
-async function safeFetch(
+export async function safeFetch(
   url: URL,
   fetchImpl: typeof fetch,
 ): Promise<{ res: Response; finalUrl: URL; body: string; ms: number }> {
